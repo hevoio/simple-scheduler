@@ -1,4 +1,4 @@
 package io.hevo.scheduler.dto
 
-case class ExecutionContext(parameters: Map[String, _]) {
+case class ExecutionContext(parameters: String) {
 }

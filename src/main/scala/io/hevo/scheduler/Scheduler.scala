@@ -12,17 +12,18 @@ class Scheduler private {
 
   private val LOG = LoggerFactory.getLogger(classOf[Scheduler])
 
-  private val config: SchedulerConfig = null
+  private var config: SchedulerConfig = _
   private var monitor: ScheduledExecutorService = _
 
   private var schedulerService: SchedulerService = _
   var schedulerRegistry: SchedulerRegistry = _
 
-  def this(app_id: String, config: SchedulerConfig, jobHandlerFactory: JobHandlerFactory = new ConstructionBasedFactory) {
+  def this(config: SchedulerConfig, jobHandlerFactory: JobHandlerFactory = new ConstructionBasedFactory) {
     this
-    val taskRepository: TaskRepository = new TaskRepository(config.orm)
-    this.schedulerService = new SchedulerService(config.workerConfig, jobHandlerFactory, taskRepository, new LockHandler(Option(config.lock)))
+    this.config = config
+    val taskRepository: TaskRepository = new TaskRepository(config.dataSource, config.tablePrefix)
     this.schedulerRegistry = new SchedulerRegistry(taskRepository)
+    this.schedulerService = new SchedulerService(config.workerConfig, jobHandlerFactory, taskRepository, this.schedulerRegistry, new LockHandler(Option(config.lock)))
   }
 
   def start(): Unit = {
@@ -33,7 +34,10 @@ class Scheduler private {
 
   private val runner = new Runnable {
     def run(): Unit = {
-      try schedulerService.process()
+      try {
+        schedulerService.process()
+        schedulerService.attemptCleanup()
+      }
       catch {
         case e: Exception => LOG.error("Failed to process the scheduler job", e)
       }

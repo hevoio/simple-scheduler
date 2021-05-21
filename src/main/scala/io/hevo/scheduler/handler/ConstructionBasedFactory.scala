@@ -3,7 +3,7 @@ package io.hevo.scheduler.handler
 import java.util.Optional
 
 import io.hevo.scheduler.Job
-import io.hevo.scheduler.core.model.Task
+import io.hevo.scheduler.dto.task.Task
 
 /**
  * Default handler class that creates a new instance of the Job class on invocation

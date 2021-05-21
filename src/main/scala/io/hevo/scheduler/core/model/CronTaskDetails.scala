@@ -10,7 +10,8 @@ import com.cronutils.model.time.ExecutionTime
 import com.cronutils.parser.CronParser
 import io.hevo.scheduler.core.Constants
 
-case class CronTask(_id: Long, _nameSpace: String = Constants.DefaultNamespace, _key: String, _scheduleExpression: String) extends Task(_id, _nameSpace, _key, _scheduleExpression) {
+case class CronTaskDetails(_nameSpace: String = Constants.DefaultNamespace, _key: String, _scheduleExpression: String, _handlerClassName: String) extends
+  TaskDetails(_nameSpace, _key, _scheduleExpression, _handlerClassName) {
 
   override def schedule(): Cron = {
     val unixParser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(com.cronutils.model.CronType.UNIX))

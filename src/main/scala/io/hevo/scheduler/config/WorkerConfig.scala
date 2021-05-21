@@ -1,6 +1,11 @@
 package io.hevo.scheduler.config
 
-class WorkerConfig {
+class WorkerConfig(_appId: String) {
+
+  /**
+   * Host app identifier. Unique per JVM
+   */
+  val appId: String = _appId
 
   var workers: Int = 5
   /**
@@ -12,11 +17,15 @@ class WorkerConfig {
    * Sync the task updates to the db in batches at this frequency (in seconds)
    * This is applicable only when batchUpdates has been set as true
    */
-  var batchUpdateFrequency: Long = 5
+  var batchUpdateFrequency: Long = 3
   /**
    * Maximum time in future to pick the tasks from (in seconds)
    */
   var maxLookAheadTime: Int = 3
+  /**
+   * Attempt cleanup of "stuck" objects proactively at this frequency (in seconds)
+   */
+  var cleanupFrequency: Int = 30 * 60
 
   def workers(workers: Int): WorkerConfig = {
     this.workers = workers

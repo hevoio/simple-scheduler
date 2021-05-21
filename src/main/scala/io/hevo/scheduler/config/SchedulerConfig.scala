@@ -1,16 +1,17 @@
 package io.hevo.scheduler.config
 
 import io.hevo.scheduler.lock.Lock
-import org.jdbi.v3.core.Jdbi
+import javax.sql.DataSource
 
-class SchedulerConfig(val orm: Jdbi) {
+class SchedulerConfig(val dataSource: DataSource, val _workerConfig: WorkerConfig) {
+  var tablePrefix: String = ""
   var lock: Lock = _
   /**
    * In Seconds
    */
   var pollFrequency: Int = 1
 
-  var workerConfig: WorkerConfig = new WorkerConfig
+  var workerConfig: WorkerConfig = _workerConfig
 
   def redisPool(lock: Lock): SchedulerConfig = {
     this.lock = lock
@@ -22,8 +23,9 @@ class SchedulerConfig(val orm: Jdbi) {
     this
   }
 
-  def workerConfig(workerConfig: WorkerConfig): SchedulerConfig = {
-    this.workerConfig = workerConfig
+  def tablePrefix(tablePrefix: String): SchedulerConfig = {
+    this.tablePrefix = tablePrefix
     this
   }
+
 }

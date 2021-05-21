@@ -1,45 +1,40 @@
 package io.hevo.scheduler.core.service
 
+import java.util.Date
+
 import io.hevo.scheduler.lock.Lock
+import io.hevo.scheduler.util.Util
 import org.slf4j.LoggerFactory
 
 class LockHandler(locker: Option[Lock]) {
-
   private val LOG = LoggerFactory.getLogger(classOf[LockHandler])
-
   /**
-   * It makes 3 attempts to acquire the lock in gaps of 30ms each
+   * It makes LockHandler.attempts number of attempts to acquire the lock in random gaps of LockHandler.sleepOver ms each
    * @return true if there is no Lock to be acquired or the lock acquisition was successful
    */
   def acquire(lockId: String, ttl: Int): Boolean = {
-    if(locker.isEmpty) {
-      true
-    }
-    else {
-      for(_ <- 0.to(LockHandler.attempts)) {
-        if(locker.get.acquire(lockId, ttl)) {
-          true
-        } else {
-          Thread.sleep(LockHandler.sleepOver)
+    var acquired: Boolean = true
+    if(locker.nonEmpty) {
+      acquired = false
+      (0 to LockHandler.attempts).iterator.takeWhile(_ => !acquired).foreach(iteration => {
+        acquired = locker.get.acquire(lockId, ttl)
+        LOG.info("Lock acquisition attempt by Thread: {}: at {} Iteration: {}. Acquired = {}", Thread.currentThread().getName, new Date(), iteration, acquired)
+        if(!acquired) {
+          Thread.sleep(Util.getRandom(LockHandler.sleepOver))
         }
-      }
-      false
+      })
     }
+    acquired
   }
 
   def release(lockId: String): Unit = {
-    try {
-      if (locker.isDefined) {
-        locker.get.release(lockId)
-      }
-    }
-    catch {
-      case e: Exception => LOG.error("Failed to release the lock: {}", lockId, e)
+    if (locker.isDefined) {
+      locker.get.release(lockId)
     }
   }
 }
 
 object LockHandler {
   val attempts: Int = 3
-  val sleepOver: Int = 30
+  val sleepOver: (Int, Int) = (10, 40)
 }

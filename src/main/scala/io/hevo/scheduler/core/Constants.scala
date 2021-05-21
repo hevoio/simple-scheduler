@@ -13,7 +13,7 @@ object Constants {
 
   val fieldType: String = "type"
   val fieldHandlerClass: String = "handler_class"
-  val fieldSchedule: String = "schedule"
+  val fieldScheduleExpression: String = "schedule_expression"
   val fieldExecutorId: String = "executor_id"
 
   val fieldExecutionTime: String = "execution_time"

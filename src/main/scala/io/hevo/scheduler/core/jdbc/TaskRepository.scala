@@ -1,128 +1,175 @@
 package io.hevo.scheduler.core.jdbc
 
-import java.sql.ResultSet
-import java.util
+import java.sql.{PreparedStatement, ResultSet}
+import java.util.concurrent.atomic.AtomicInteger
 
 import io.hevo.scheduler.core.Constants
-import io.hevo.scheduler.core.model.{CronTask, RepeatableTask, Task, TaskStatus, TaskType}
+import io.hevo.scheduler.core.model.{CronTaskDetails, RepeatableTaskDetails, TaskDetails, TaskStatus, TaskType}
 import io.hevo.scheduler.core.model.TaskStatus.Status
 import io.hevo.scheduler.core.model.TaskType.TaskType
 import io.hevo.scheduler.dto.TaskSuccessData
-import org.jdbi.v3.core.Jdbi
-import org.jdbi.v3.core.mapper.RowMapper
-import org.jdbi.v3.core.statement.StatementContext
+import io.hevo.scheduler.dto.task.{CronTask, Task}
+import io.hevo.scheduler.util.Util
+import javax.sql.DataSource
 
-import scala.jdk.javaapi.CollectionConverters
+/**
+ *
+ * @param _tablePrefix: The common prefix to be applied to all of the tracking tables
+ */
+class TaskRepository (_dataSource: DataSource, _tablePrefix: String) extends JdbcRepository(_dataSource) {
 
+  var dataSource: DataSource = _dataSource
+  var tablePrefix: String = _tablePrefix
 
-class TaskRepository private(tablePrefix: String) {
+  def add(tasks: List[TaskDetails]): Unit = {
+    if(tasks.nonEmpty) {
+      val sql = ("INSERT INTO %s(type, name, handler_class, schedule_expression, parameters, status, execution_time, next_execution_time) " +
+        "VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) " +
+        "ON DUPLICATE KEY UPDATE schedule_expression = ?, parameters = ?, handler_class = ?, next_execution_time = FROM_UNIXTIME(?), status = ?").format(applicableTable(TaskRepository.tasksTable))
+      super.batchUpdate(
+        sql,
+        tasks,
+        (task: TaskDetails, statement: PreparedStatement) => {
+          val counter: AtomicInteger = new AtomicInteger()
+          statement.setString(counter.incrementAndGet(), task.discriminator().toString)
+          statement.setString(counter.incrementAndGet(), task.qualifiedName())
+          statement.setString(counter.incrementAndGet(), task.handlerClassName)
+          statement.setString(counter.incrementAndGet(), task.scheduleExpression)
+          statement.setString(counter.incrementAndGet(), task.parameters)
+          statement.setString(counter.incrementAndGet(), task.status.toString)
 
-  var orm: Jdbi = _
-  def this(orm: Jdbi, tablePrefix: String = "") {
-    this(tablePrefix)
-    this.orm = orm
-    orm.registerRowMapper(new TaskMapper)
+          statement.setString(counter.incrementAndGet(), task.scheduleExpression)
+          statement.setString(counter.incrementAndGet(), task.parameters)
+          statement.setString(counter.incrementAndGet(), task.handlerClassName)
+          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.nextExecutionTime.getTime))
+          statement.setString(counter.incrementAndGet(), task.status.toString)
+        }
+      )
+    }
   }
 
-  def add(tasks: List[Task]): Unit = {
-    val sql = "INSERT INTO :table_name(type, name, handler_class, schedule_expression, status, previous_execution_time, next_execution_time) " +
-      "VALUES (:type, :name, :handler_class, :schedule, :status, NOW(), NOW()) " +
-      "ON DUPLICATE KEY UPDATE schedule_expression = :schedule_expression, next_execution_time = :next_execution_time, status = :status"
-    orm.withHandle(handle => {
-      val batch = handle.prepareBatch(sql)
-      tasks.foreach(record => {
-        batch
-          .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-          .bind(Constants.fieldType, record.discriminator())
-          .bind(Constants.fieldName, record.qualifiedName())
-          .bind(Constants.fieldHandlerClass, record.handlerClassName)
-          .bind(Constants.fieldSchedule, record.scheduleExpression)
-          .bind(Constants.fieldStatus, TaskStatus.INIT)
-          .bind(Constants.fieldNextExecutionTime, record.nextExecutionTime)
-      })
-      batch.execute
-    })
-  }
-
-  def get(namespace: String, keys: List[String]): Map[String, Task] = {
-    val qualifiedNames: List[String] = keys.map(key => Task.toQualifiedName(namespace, key))
-    val query = "SELECT * FROM :table_name WHERE name in (<name>)"
-    val list: util.List[Task] = this.orm.withHandle(handle => handle.createQuery(query)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bindList(Constants.fieldName, qualifiedNames)
-      .mapTo(classOf[Task]).list())
-    CollectionConverters.asScala(list).map(task => (task.key, task)).toMap
+  def get(namespace: String, keys: List[String]): Map[String, TaskDetails] = {
+    var map: Map[String, TaskDetails] = Map()
+    if(keys.nonEmpty) {
+      val qualifiedNames: List[String] = keys.map(key => TaskDetails.toQualifiedName(namespace, key))
+      val sql: String = "SELECT * FROM %s WHERE name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
+      val results = super.query(
+        sql,
+        statement => {
+          val counter: AtomicInteger = new AtomicInteger()
+          qualifiedNames.foreach(qualifiedName => statement.setString(counter.incrementAndGet(), qualifiedName))
+        },
+        resultSet => TaskMapper.toTaskDetails(resultSet)
+      )
+      map = results.map(taskDetails => (taskDetails.key, taskDetails)).toMap
+    }
+    map
   }
 
   def delete(namespace: String, keys: List[String]):Unit = {
-    val qualifiedNames: List[String] = keys.map(key => Task.toQualifiedName(namespace, key))
-    val sql = "DELETE FROM :table_name WHERE name in (<name>)"
-    orm.withHandle(handle => handle.createUpdate(sql)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bindList(Constants.fieldName, CollectionConverters.asJava(qualifiedNames))
-      .execute
-    )
+    if(keys.nonEmpty) {
+      val qualifiedNames: List[String] = keys.map(key => TaskDetails.toQualifiedName(namespace, key))
+      val sql: String = "DELETE FROM %s WHERE name in (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(qualifiedNames.length)("?").mkString(","))
+      super.update(
+        sql,
+        statement => {
+          val counter: AtomicInteger = new AtomicInteger()
+          qualifiedNames.foreach(qualifiedName => statement.setString(counter.incrementAndGet(), qualifiedName))
+        }
+      )
+    }
   }
 
-  def fetch(statuses: util.List[Status], count: Int, futureSeconds: Int): List[Task] = {
-    val query = "SELECT * FROM :table_name WHERE status in (<status>) AND next_execution_time < DATE_ADD(NOW(), INTERVAL :seconds SECOND) ORDER BY next_execution_time LIMIT :limit"
-
-    val list: util.List[Task] = this.orm.withHandle(handle => handle.createQuery(query)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bindList(Constants.fieldStatus, statuses)
-      .bind(Constants.fieldSeconds, futureSeconds)
-      .bind(Constants.fieldLimit, count)
-      .mapTo(classOf[Task]).list())
-
-    CollectionConverters.asScala(list).toList
+  def fetch(statuses: List[Status], count: Int, futureSeconds: Int): List[TaskDetails] = {
+    val sql: String = "SELECT * FROM %s WHERE status in (%s) AND next_execution_time < DATE_ADD(NOW(), INTERVAL ? SECOND) ORDER BY next_execution_time ASC LIMIT ?"
+      .format(applicableTable(TaskRepository.tasksTable), List.fill(statuses.length)("?").mkString(","))
+    super.query(
+      sql,
+      statement => {
+        val counter: AtomicInteger = new AtomicInteger()
+        statuses.foreach(status => statement.setString(counter.incrementAndGet(), status.toString))
+        statement.setInt(counter.incrementAndGet(), futureSeconds)
+        statement.setInt(counter.incrementAndGet(), count)
+      },
+      resultSet => TaskMapper.toTaskDetails(resultSet)
+    )
   }
 
   def markPicked(ids: List[Long], executorId: String): Unit = {
-    val sql = "UPDATE :table_name set status = :status, executor_id = :executor_id WHERE id IN (<ids>)"
-    orm.withHandle(handle => handle.createUpdate(sql)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bind(Constants.fieldExecutorId, executorId)
-      .bind(Constants.fieldStatus, TaskStatus.PICKED)
-      .bindList(Constants.fieldIds, CollectionConverters.asJava(ids))
-      .execute
-    )
+    if(ids.nonEmpty) {
+      val sql: String = "UPDATE %s SET status = ?, executor_id = ?, picked_at = NOW(), executions = executions + 1 WHERE id IN (%s)"
+        .format(applicableTable(TaskRepository.tasksTable), List.fill(ids.length)("?").mkString(","))
+      super.update(
+        sql,
+        statement => {
+          val counter: AtomicInteger = new AtomicInteger()
+          statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
+          statement.setString(counter.incrementAndGet(), executorId)
+          ids.foreach(id => statement.setLong(counter.incrementAndGet(), id))
+        }
+      )
+    }
   }
 
   def update(fromStatus: Status, toStatus: Status, executorId: String): Unit = {
-    val sql = "UPDATE :table_name SET status = :to_status WHERE executor_id = :executor_id AND status = :from_status"
-    orm.withHandle(handle => handle.createUpdate(sql)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bind(Constants.fieldFromStatus, fromStatus)
-      .bind(Constants.fieldToStatus, toStatus)
-      .bind(Constants.fieldExecutorId, executorId)
-      .execute
+    val sql: String = "UPDATE %s SET status = ? WHERE executor_id = ? AND status = ?".format(applicableTable(TaskRepository.tasksTable))
+    super.update(
+      sql,
+      statement => {
+        val counter: AtomicInteger = new AtomicInteger()
+        statement.setString(counter.incrementAndGet(), toStatus.toString)
+        statement.setString(counter.incrementAndGet(), executorId)
+        statement.setString(counter.incrementAndGet(), fromStatus.toString)
+      }
     )
   }
 
   def markFailed(ids: List[Long], targetStatus: Status): Unit = {
-    val sql = "UPDATE :table_name set status = :status, last_failed_at = NOW(), failure_count = failure_count + 1 WHERE id IN (<ids>)"
-    orm.withHandle(handle => handle.createUpdate(sql)
-      .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-      .bind(Constants.fieldStatus, targetStatus)
-      .bindList(Constants.fieldIds, CollectionConverters.asJava(ids))
-      .execute
+    if(ids.nonEmpty) {
+      val sql: String = "UPDATE %s set status = ?, last_failed_at = NOW(), failure_count = failure_count + 1 WHERE id IN (%s)"
+        .format(applicableTable(TaskRepository.tasksTable), List.fill(ids.length)("?").mkString(","))
+      super.update(
+        sql,
+        statement => {
+          val counter: AtomicInteger = new AtomicInteger()
+          statement.setString(counter.incrementAndGet(), targetStatus.toString)
+          ids.foreach(id => {
+            statement.setLong(counter.incrementAndGet(), id)
+          })
+        }
+      )
+    }
+  }
+
+  def markExpired(fromStatus: Status, pickedSince: Int): Unit = {
+    val sql: String = ("UPDATE %s set status = ?, last_failed_at = NOW(), failure_count = failure_count + 1 " +
+      "WHERE status = ? AND picked_at < DATE_ADD(NOW(), INTERVAL -? SECOND)").format(applicableTable(TaskRepository.tasksTable))
+    super.update(
+      sql,
+      statement => {
+        val counter: AtomicInteger = new AtomicInteger()
+        statement.setString(counter.incrementAndGet(), TaskStatus.EXPIRED.toString)
+        statement.setString(counter.incrementAndGet(), fromStatus.toString)
+        statement.setInt(counter.incrementAndGet(), pickedSince)
+      }
     )
   }
 
   def markSucceeded(data: List[TaskSuccessData]): Unit = {
-    val sql = "UPDATE :table_name set status = :status, failure_count = 0, previous_execution_time = UNIX_TIMESTAMP(:execution_time), next_execution_time = UNIX_TIMESTAMP(:next_execution_time) WHERE id in (<ids>)"
-    orm.withHandle(handle => {
-      val batch = handle.prepareBatch(sql)
-      data.foreach(record => {
-        batch
-          .bind(Constants.fieldTableName, applicableTable(TaskRepository.tasksTable))
-          .bind(Constants.fieldStatus, TaskStatus.SUCCEEDED)
-          .bind(Constants.fieldExecutionTime, record.actualExecutionTime)
-          .bind(Constants.fieldNextExecutionTime, record.nextExecutionTime)
-          .bind(Constants.fieldId, record.id)
-      })
-      batch.execute
-    })
+    if(data.nonEmpty) {
+      val sql = "UPDATE %s set status = ?, failure_count = 0, execution_time = FROM_UNIXTIME(?), next_execution_time = FROM_UNIXTIME(?) WHERE id = ?".format(applicableTable(TaskRepository.tasksTable))
+      super.batchUpdate(
+        sql,
+        data,
+        (task: TaskSuccessData, statement: PreparedStatement) => {
+          val counter: AtomicInteger = new AtomicInteger()
+          statement.setString(counter.incrementAndGet(), TaskStatus.SUCCEEDED.toString)
+          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.actualExecutionTime))
+          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.nextExecutionTime))
+          statement.setLong(counter.incrementAndGet(), task.id)
+        }
+      )
+    }
   }
 
   private def applicableTable(table: String): String = {
@@ -134,23 +181,29 @@ object TaskRepository {
   val tasksTable: String = "scheduled_tasks"
 }
 
-class TaskMapper extends RowMapper[Task] {
+object TaskMapper {
 
-  override def map(resultSet: ResultSet, ctx: StatementContext): Task = {
+  def toTaskDetails(resultSet: ResultSet): TaskDetails = {
+
     val taskType: TaskType = TaskType.withName(resultSet.getString(Constants.fieldType))
 
-    val id: Long = resultSet.getLong(Constants.fieldId)
-    val namespaceKeyTuple: (String, String) = Task.fromQualifiedName(resultSet.getString(Constants.fieldName))
-    val scheduleExpression: String = resultSet.getString(Constants.fieldSchedule)
-    val task: Task = if(TaskType.CRON == taskType) CronTask(id, namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression) else RepeatableTask(id, namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression)
+    val namespaceKeyTuple: (String, String) = TaskDetails.fromQualifiedName(resultSet.getString(Constants.fieldName))
+    val scheduleExpression: String = resultSet.getString(Constants.fieldScheduleExpression)
+    val handlerClassName: String = resultSet.getString(Constants.fieldHandlerClass)
+    val task: TaskDetails = if(TaskType.CRON == taskType) CronTaskDetails(namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression, handlerClassName) else RepeatableTaskDetails(namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression, handlerClassName)
 
-    task.handlerClassName = resultSet.getString(Constants.fieldType)
-    val params = resultSet.getObject(Constants.fieldParameters)
-    task.parameters = if(null == params) null else params.asInstanceOf[Map[String, _]]
+    task.id = resultSet.getLong(Constants.fieldId)
+    task.parameters = resultSet.getString(Constants.fieldParameters)
     task.status = TaskStatus.withName(resultSet.getString(Constants.fieldStatus))
-    task.nextExecutionTime = resultSet.getDate(Constants.fieldNextExecutionTime)
-    task.executionTime = resultSet.getDate(Constants.fieldExecutionTime)
+    task.nextExecutionTime = resultSet.getTimestamp(Constants.fieldNextExecutionTime)
+    task.executionTime = resultSet.getTimestamp(Constants.fieldExecutionTime)
 
     task
+  }
+
+  def toTaskDetails(task: Task): TaskDetails = {
+    (if(task.isInstanceOf[CronTask]) classOf[CronTaskDetails] else classOf[RepeatableTaskDetails])
+      .getDeclaredConstructor(classOf[String], classOf[String], classOf[String], classOf[String])
+      .newInstance(task.namespace, task.key, task.scheduleExpression(), task.handlerClassName)
   }
 }
