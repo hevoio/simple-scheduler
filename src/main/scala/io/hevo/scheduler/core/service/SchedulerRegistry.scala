@@ -15,9 +15,6 @@ class SchedulerRegistry(taskRepository: TaskRepository) {
     this.register(List(task))
   }
 
-  /**
-   * @param tasks Input tasks to be registered. Duplicates are not used unless their uniqueness has changed
-   */
   def register(tasks: List[Task]): Unit = {
     validate(tasks)
     val request: Map[String, List[TaskDetails]] = tasks.map(task => TaskMapper.toTaskDetails(task)).groupBy(taskDetails => taskDetails.namespace)
@@ -25,7 +22,7 @@ class SchedulerRegistry(taskRepository: TaskRepository) {
       val allExisting: Map[String, TaskDetails] = taskRepository.get(namespace, list.map(taskDetails => taskDetails.key))
       val toAdd: List[TaskDetails] = list.filter(taskDetails => {
         val existingTaskDetails: Option[TaskDetails] = allExisting.get(taskDetails.key)
-        existingTaskDetails.isEmpty || !existingTaskDetails.get.uniqueness().equals(taskDetails.uniqueness())
+        existingTaskDetails.isEmpty || !existingTaskDetails.get.primaryParameters().equals(taskDetails.primaryParameters())
       }).map(taskDetails => {
         val existingTask: Option[TaskDetails] = allExisting.get(taskDetails.key)
         taskDetails.nextExecutionTime = if(existingTask.isEmpty) new Date() else taskDetails.calculateNextExecutionTime(existingTask.get.executionTime)

@@ -1,22 +1,27 @@
 package io.hevo.scheduler.core.jdbc
 
 import java.sql.{PreparedStatement, ResultSet}
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 
 import io.hevo.scheduler.core.Constants
 import io.hevo.scheduler.core.model.{CronTaskDetails, RepeatableTaskDetails, TaskDetails, TaskStatus, TaskType}
 import io.hevo.scheduler.core.model.TaskStatus.Status
 import io.hevo.scheduler.core.model.TaskType.TaskType
-import io.hevo.scheduler.dto.TaskSuccessData
+import io.hevo.scheduler.dto.ExecutionResponseData
 import io.hevo.scheduler.dto.task.{CronTask, Task}
 import io.hevo.scheduler.util.Util
 import javax.sql.DataSource
+import org.slf4j.LoggerFactory
 
 /**
  *
  * @param _tablePrefix: The common prefix to be applied to all of the tracking tables
  */
-class TaskRepository (_dataSource: DataSource, _tablePrefix: String) extends JdbcRepository(_dataSource) {
+class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends JdbcRepository(_dataSource) {
+
+  private val LOG = LoggerFactory.getLogger(classOf[TaskRepository])
 
   var dataSource: DataSource = _dataSource
   var tablePrefix: String = _tablePrefix
@@ -95,6 +100,14 @@ class TaskRepository (_dataSource: DataSource, _tablePrefix: String) extends Jdb
     )
   }
 
+  /**
+   * @return All tasks. Only for tests
+   */
+  def fetchAll(): List[TaskDetails] = {
+    val sql: String = "SELECT * FROM %s".format(applicableTable(TaskRepository.tasksTable))
+    super.query(sql, _ => {}, resultSet => TaskMapper.toTaskDetails(resultSet))
+  }
+
   def markPicked(ids: List[Long], executorId: String): Unit = {
     if(ids.nonEmpty) {
       val sql: String = "UPDATE %s SET status = ?, executor_id = ?, picked_at = NOW(), executions = executions + 1 WHERE id IN (%s)"
@@ -124,23 +137,6 @@ class TaskRepository (_dataSource: DataSource, _tablePrefix: String) extends Jdb
     )
   }
 
-  def markFailed(ids: List[Long], targetStatus: Status): Unit = {
-    if(ids.nonEmpty) {
-      val sql: String = "UPDATE %s set status = ?, last_failed_at = NOW(), failure_count = failure_count + 1 WHERE id IN (%s)"
-        .format(applicableTable(TaskRepository.tasksTable), List.fill(ids.length)("?").mkString(","))
-      super.update(
-        sql,
-        statement => {
-          val counter: AtomicInteger = new AtomicInteger()
-          statement.setString(counter.incrementAndGet(), targetStatus.toString)
-          ids.foreach(id => {
-            statement.setLong(counter.incrementAndGet(), id)
-          })
-        }
-      )
-    }
-  }
-
   def markExpired(fromStatus: Status, pickedSince: Int): Unit = {
     val sql: String = ("UPDATE %s set status = ?, last_failed_at = NOW(), failure_count = failure_count + 1 " +
       "WHERE status = ? AND picked_at < DATE_ADD(NOW(), INTERVAL -? SECOND)").format(applicableTable(TaskRepository.tasksTable))
@@ -155,18 +151,29 @@ class TaskRepository (_dataSource: DataSource, _tablePrefix: String) extends Jdb
     )
   }
 
-  def markSucceeded(data: List[TaskSuccessData]): Unit = {
+  def markFailed(data: List[ExecutionResponseData]): Unit = {
+    val sql: String = "UPDATE %s SET status = ?, last_failed_at = NOW(), failure_count = failure_count + 1, execution_time = FROM_UNIXTIME(?), next_execution_time = FROM_UNIXTIME(?) WHERE id = ?"
+      .format(applicableTable(TaskRepository.tasksTable))
+    updateStatus(sql, data)
+  }
+
+  def markSucceeded(data: List[ExecutionResponseData]): Unit = {
+    val sql = "UPDATE %s SET status = ?, failure_count = 0, execution_time = FROM_UNIXTIME(?), next_execution_time = FROM_UNIXTIME(?) WHERE id = ?".format(applicableTable(TaskRepository.tasksTable))
+    updateStatus(sql, data)
+  }
+
+  private def updateStatus(sql: String, data: List[ExecutionResponseData]): Unit = {
     if(data.nonEmpty) {
-      val sql = "UPDATE %s set status = ?, failure_count = 0, execution_time = FROM_UNIXTIME(?), next_execution_time = FROM_UNIXTIME(?) WHERE id = ?".format(applicableTable(TaskRepository.tasksTable))
+      data.foreach(record => LOG.info("Id: {} Status: {} at {}", record.id, record.targetStatus, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
       super.batchUpdate(
         sql,
         data,
-        (task: TaskSuccessData, statement: PreparedStatement) => {
+        (responseData: ExecutionResponseData, statement: PreparedStatement) => {
           val counter: AtomicInteger = new AtomicInteger()
-          statement.setString(counter.incrementAndGet(), TaskStatus.SUCCEEDED.toString)
-          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.actualExecutionTime))
-          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.nextExecutionTime))
-          statement.setLong(counter.incrementAndGet(), task.id)
+          statement.setString(counter.incrementAndGet(), responseData.targetStatus.toString)
+          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(responseData.actualExecutionTime))
+          statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(responseData.nextExecutionTime))
+          statement.setLong(counter.incrementAndGet(), responseData.id)
         }
       )
     }
@@ -198,12 +205,17 @@ object TaskMapper {
     task.nextExecutionTime = resultSet.getTimestamp(Constants.fieldNextExecutionTime)
     task.executionTime = resultSet.getTimestamp(Constants.fieldExecutionTime)
 
+    task.executions = resultSet.getLong(Constants.fieldExecutions)
+    task.failures = resultSet.getInt(Constants.fieldFailures)
+
     task
   }
 
   def toTaskDetails(task: Task): TaskDetails = {
-    (if(task.isInstanceOf[CronTask]) classOf[CronTaskDetails] else classOf[RepeatableTaskDetails])
+    val taskDetails: TaskDetails = (if(task.isInstanceOf[CronTask]) classOf[CronTaskDetails] else classOf[RepeatableTaskDetails])
       .getDeclaredConstructor(classOf[String], classOf[String], classOf[String], classOf[String])
       .newInstance(task.namespace, task.key, task.scheduleExpression(), task.handlerClassName)
+    taskDetails.parameters = task.parameters
+    taskDetails
   }
 }

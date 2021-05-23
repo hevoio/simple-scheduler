@@ -2,6 +2,9 @@ package io.hevo.scheduler
 
 import io.hevo.scheduler.dto.ExecutionContext
 
+/**
+ * Trait for Job execution
+ */
 trait Job {
   def execute(context: ExecutionContext): ExecutionStatus.Status
 }

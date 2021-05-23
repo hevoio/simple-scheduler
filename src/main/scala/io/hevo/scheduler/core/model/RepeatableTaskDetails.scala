@@ -15,6 +15,6 @@ case class RepeatableTaskDetails(_nameSpace: String = Constants.DefaultNamespace
   override def discriminator(): TaskType.TaskType = TaskType.REPEATABLE
 
   override def calculateNextExecutionTime(reference: Date): Date = {
-    super.calculateNextExecutionTime(new Date(System.currentTimeMillis() + schedule().toMillis))
+    super.calculateNextExecutionTime(new Date(reference.getTime + schedule().toMillis))
   }
 }

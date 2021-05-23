@@ -19,8 +19,14 @@ object Constants {
   val fieldExecutionTime: String = "execution_time"
   val fieldNextExecutionTime: String = "next_execution_time"
 
+  val fieldFailures: String = "failure_count"
+  val fieldExecutions: String = "executions"
+
   val fieldSeconds: String = "seconds"
   val fieldLimit: String = "limit"
 
   val DefaultNamespace = "DEFAULT"
+
+  val InitialDelay: Long = 0
+  val ShutDownWait: Long = 2 // 45
 }

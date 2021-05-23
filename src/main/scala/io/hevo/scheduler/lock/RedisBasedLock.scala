@@ -5,6 +5,9 @@ import redis.clients.jedis.JedisPool
 
 import scala.util.Using
 
+/**
+ * A light-weight redis based implementation of the Lock trait
+ */
 class RedisBasedLock(jedisPool: JedisPool) extends Lock {
 
   override def acquire(lockId: String, ttl: Int): Boolean = {

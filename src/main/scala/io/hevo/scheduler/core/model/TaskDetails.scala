@@ -20,16 +20,16 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
 
   var status: TaskStatus.Value = TaskStatus.INIT
 
+  var executions: Long = _
+  var failures: Int = _
+
   def schedule(): Any
 
   def discriminator(): TaskType.TaskType
   def qualifiedName(): String = TaskDetails.toQualifiedName(namespace, key)
 
-  /**
-   * @return the combination of parameters that define the uniqueness of the task
-   */
-  def uniqueness(): String = {
-    "%s_%s_%s_%s".format(namespace, key, handlerClassName, scheduleExpression)
+  def primaryParameters(): String = {
+    "%s_%s".format(handlerClassName, scheduleExpression)
   }
 
   /**
@@ -43,14 +43,14 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
 }
 
 object TaskDetails {
-  val qualifiedNameTemplate: String = "%s_%s"
+  val qualifiedNameTemplate: String = "%s___%s"
 
   def toQualifiedName(namespace: String, key: String): String = {
     qualifiedNameTemplate.format(namespace, key)
   }
 
   def fromQualifiedName(qualifiedName: String): (String, String) = {
-    val components: Array[String] = qualifiedName.split("_")
+    val components: Array[String] = qualifiedName.split("___", 2)
     (components.apply(0), components.apply(1))
   }
 }

@@ -16,5 +16,4 @@ class ConstructionBasedFactory extends JobHandlerFactory {
     val constructor = clazz.getConstructor()
     Optional.of(constructor.newInstance())
   }
-
 }

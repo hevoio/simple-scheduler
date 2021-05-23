@@ -18,7 +18,6 @@ class LockHandler(locker: Option[Lock]) {
       acquired = false
       (0 to LockHandler.attempts).iterator.takeWhile(_ => !acquired).foreach(iteration => {
         acquired = locker.get.acquire(lockId, ttl)
-        LOG.info("Lock acquisition attempt by Thread: {}: at {} Iteration: {}. Acquired = {}", Thread.currentThread().getName, new Date(), iteration, acquired)
         if(!acquired) {
           Thread.sleep(Util.getRandom(LockHandler.sleepOver))
         }

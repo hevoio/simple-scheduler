@@ -1,15 +1,16 @@
 package io.hevo.scheduler.core.service
 
-import java.time.Instant
+import java.text.SimpleDateFormat
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ExecutorService, Executors, ThreadFactory, TimeUnit}
 import java.util.{Date, Optional}
 
-import io.hevo.scheduler.{ExecutionStatus, Job}
-import io.hevo.scheduler.config.WorkerConfig
+import io.hevo.scheduler.{ExecutionStatus, Job, Scheduler, SchedulerStatus}
+import io.hevo.scheduler.config.WorkConfig
+import io.hevo.scheduler.core.Constants
 import io.hevo.scheduler.core.jdbc.TaskRepository
 import io.hevo.scheduler.core.model.{TaskDetails, TaskStatus}
-import io.hevo.scheduler.dto.{ExecutionContext, TaskSuccessData}
+import io.hevo.scheduler.dto.{ExecutionContext, ExecutionResponseData}
 import io.hevo.scheduler.handler.JobHandlerFactory
 import io.hevo.scheduler.util.Util
 import org.slf4j.LoggerFactory
@@ -17,47 +18,62 @@ import org.slf4j.LoggerFactory
 import scala.collection.mutable
 import scala.util.Try
 
+/**
+ * The core of the scheduler
+ */
 class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskRepository: TaskRepository, schedulerRegistry: SchedulerRegistry, lockHandler: LockHandler) extends AutoCloseable {
 
   private val LOG = LoggerFactory.getLogger(classOf[SchedulerService])
   private var workerPool: ExecutorService = _
-  private var workerConfig: WorkerConfig = _
+  private var workConfig: WorkConfig = _
 
   private val workLock: Lock = new ReentrantLock
 
-  def this(config: WorkerConfig, jobHandlerFactory: JobHandlerFactory, taskRepository: TaskRepository, schedulerRegistry: SchedulerRegistry, lockHandler: LockHandler) {
+  def this(config: WorkConfig, jobHandlerFactory: JobHandlerFactory, taskRepository: TaskRepository, schedulerRegistry: SchedulerRegistry, lockHandler: LockHandler) {
     this(jobHandlerFactory, taskRepository, schedulerRegistry, lockHandler)
-    this.workerConfig = config
+    this.workConfig = config
 
     this.cleanupOnStart()
 
-    val schedulerWorkerThreadFactory: ThreadFactory = (runnable: Runnable) => new Thread(runnable, "scheduler-worker")
+    val schedulerWorkerThreadFactory: ThreadFactory = new SchedulerThreadFactory("scheduler-worker")
     this.workerPool = Executors.newFixedThreadPool(config.workers, schedulerWorkerThreadFactory)
   }
 
-  def process(): Unit = {
-    if(workLock.tryLock()) {
-      try this.work()
-      finally {
-        workLock.unlock()
+  /**
+   * This is called by main scheduler thread periodically.
+   * It is also called as the last step of the work being performed by a worker thread in some cases
+   */
+  def process(): Boolean = {
+    var worked: Boolean = false
+    Try {
+      val lockAcquired: Boolean = workLock.tryLock()
+      if(Scheduler.isActive && lockAcquired) {
+        try worked = this.doWork()
+        finally {
+          if(lockAcquired) {
+            workLock.unlock()
+          }
+        }
       }
     }
+    worked
   }
 
-  def work(): Unit = {
+  def doWork(): Boolean = {
     var lockAcquired: Boolean = false
     try {
       lockAcquired = lockHandler.acquire(SchedulerService.GlobalWorkLockId, SchedulerService.LockLife)
       if(lockAcquired) {
-        val requestSize: Int = tasksToFetch()
+        val requestSize: Int = workConfig.tasksToRequest(SchedulerService.UnfinishedTasks.size)
+        LOG.debug("Attempting to request: {} tasks", requestSize)
         if(requestSize > 0) {
-          val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.READY_STATUSES, requestSize, workerConfig.maxLookAheadTime)
-          SchedulerService.HadReceivedPlenty = tasks.size == requestSize
+          val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.EXECUTABLE_STATUSES, requestSize, workConfig.maxLookAheadTime)
+          SchedulerService.HadReceivedPlenty = tasks.size == requestSize && requestSize >= workConfig.workers
           tasks.foreach(task => {
             SchedulerService.UnfinishedTasks.add(task.id)
             this.workerPool.submit(new Handler(task))
           })
-          taskRepository.markPicked(tasks.map(_.id), workerConfig.appId)
+          taskRepository.markPicked(tasks.map(_.id), workConfig.appId)
         }
       }
     }
@@ -66,12 +82,13 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
     finally {
       if(lockAcquired) {
-        Try {
+        Util.throwOnError(Try {
           lockHandler.release(SchedulerService.GlobalWorkLockId)
-        }
+        })
       }
     }
     this.trySyncingProcessedTaskInformation()
+    lockAcquired
   }
 
   def onSuccess(task: TaskDetails, executionStatus: ExecutionStatus.Status): Unit = {
@@ -80,15 +97,15 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
     else {
       SchedulerService.SuccessTracker.put(task.id, successData(task))
-      if (!workerConfig.batchUpdates) {
+      if (!workConfig.batchUpdates) {
         this.syncProcessedTaskInformationNow()
       }
     }
   }
 
   def onFailure(task: TaskDetails): Unit = {
-    SchedulerService.FailureTracker.put(task.id, new Date)
-    if(!workerConfig.batchUpdates) {
+    SchedulerService.FailureTracker.put(task.id, failureData(task))
+    if(!workConfig.batchUpdates) {
       this.syncProcessedTaskInformationNow()
     }
   }
@@ -99,7 +116,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
   private def trySyncingProcessedTaskInformation(): Unit = {
     try {
-      if (workerConfig.batchUpdates && Util.nowWithDelta(-workerConfig.batchUpdateFrequency).after(SchedulerService.UpdatesSyncedAt)) {
+      if (workConfig.batchUpdates && Util.nowWithDelta(-workConfig.batchUpdateFrequency).after(SchedulerService.UpdatesSyncedAt)) {
         this.syncProcessedTaskInformationNow()
       }
     }
@@ -107,34 +124,45 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
       case e: Exception => LOG.error("Error while persisting processed task information", e)
     }
   }
+
   private def syncProcessedTaskInformationNow(): Unit = {
-    if(SchedulerService.SuccessTracker.nonEmpty) {
-      val successDataList: List[TaskSuccessData] = SchedulerService.SuccessTracker.values.toList
-      taskRepository.markSucceeded(successDataList)
-      successDataList.foreach(successData => SchedulerService.FailureTracker.remove(successData.id))
+    syncProcessedTaskUpdates(SchedulerService.SuccessTracker, taskRepository.markSucceeded)
+    syncProcessedTaskUpdates(SchedulerService.FailureTracker, taskRepository.markFailed)
+    SchedulerService.UpdatesSyncedAt = new Date()
+  }
+  private def syncProcessedTaskUpdates(updatesTracker: mutable.Map[Long, ExecutionResponseData], updater: List[ExecutionResponseData] => Unit): Unit = {
+    if(updatesTracker.nonEmpty) {
+      val list: List[ExecutionResponseData] = updatesTracker.values.toList
+      updater(list)
+      list.foreach(update => updatesTracker.remove(update.id))
     }
-    if(SchedulerService.FailureTracker.nonEmpty) {
-      val ids: List[Long] = SchedulerService.FailureTracker.keys.toList
-      taskRepository.markFailed(ids, TaskStatus.FAILED)
-      ids.foreach(id => SchedulerService.FailureTracker.remove(id))
-    }
-    SchedulerService.UpdatesSyncedAt =  new Date()
   }
 
-  private def tasksToFetch(): Int = {
-    workerConfig.workers * workerConfig.pickupFactor - SchedulerService.UnfinishedTasks.size
+  private def successData(task: TaskDetails): ExecutionResponseData = {
+    val nextExecutionTime: Long = task.calculateNextExecutionTime(referenceTimeForNextExecution(task)).getTime
+    ExecutionResponseData(task.id, System.currentTimeMillis(), nextExecutionTime, TaskStatus.SUCCEEDED)
   }
 
-  private def successData(task: TaskDetails): TaskSuccessData = {
-    val nextExecutionTime: Long = task.calculateNextExecutionTime(task.nextExecutionTime).getTime
-    TaskSuccessData(task.id, Instant.now().toEpochMilli, nextExecutionTime)
+  private def failureData(task: TaskDetails): ExecutionResponseData = {
+    val targetStatus: TaskStatus.Status = if (Scheduler.isInterrupted) TaskStatus.INTERRUPTED else TaskStatus.FAILED
+    val nextExecutionTime: Long = if (Scheduler.isInterrupted) Util.nowWithDelta(SchedulerService.MinJobExecutionGap).getTime else task.calculateNextExecutionTime(referenceTimeForNextExecution(task)).getTime
+    ExecutionResponseData(task.id, System.currentTimeMillis(), nextExecutionTime, targetStatus)
   }
 
+  private def referenceTimeForNextExecution(task: TaskDetails): Date = {
+    if(workConfig.nextRelativeToNow) new Date() else task.nextExecutionTime
+  }
+
+  /**
+   * In some cases, the tasks may stay in the PICKED state in case of an app crash or otherwise.
+   * This operation move such tasks to EXPIRED state. Make sure that the cleanupFrequency is larger than the maximum time for which any job can legitimately run
+   * Note that if a lock is used, the lock is not released for the entire duration so that other instances of the Scheduler also don't attempt the cleanups
+   */
   def attemptCleanup(): Unit = {
-    if(Util.nowWithDelta(-workerConfig.cleanupFrequency).after(SchedulerService.CleanupAttemptedAt)) {
+    if(Util.nowWithDelta(-workConfig.cleanupFrequency).after(SchedulerService.CleanupAttemptedAt)) {
       try {
-        if(lockHandler.acquire(SchedulerService.GlobalCleanupLockId, workerConfig.cleanupFrequency)) {
-          taskRepository.markExpired(TaskStatus.PICKED, workerConfig.cleanupFrequency)
+        if(lockHandler.acquire(SchedulerService.GlobalCleanupLockId, workConfig.cleanupFrequency)) {
+          taskRepository.markExpired(TaskStatus.PICKED, workConfig.cleanupFrequency)
         }
       }
       finally {
@@ -143,16 +171,31 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
   }
 
-  private def cleanupOnStart(): Unit = taskRepository.update(TaskStatus.PICKED, TaskStatus.EXPIRED, this.workerConfig.appId)
+  /**
+   * When the scheduler instance starts, all of the jobs that were "stuck" in the PICKED state are marked as EXPIRED for this scheduler instance, identified by the app_id
+   */
+  private def cleanupOnStart(): Unit = taskRepository.update(TaskStatus.PICKED, TaskStatus.EXPIRED, this.workConfig.appId)
 
   override def close(): Unit = {
+    Scheduler.Status = SchedulerStatus.STOPPING
+    LOG.info("Scheduler is shutting down. Unfinished tasks: {} at {}", SchedulerService.UnfinishedTasks, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))
     if(null != this.workerPool && !this.workerPool.isShutdown) {
       this.workerPool.shutdown()
-      try this.workerPool.awaitTermination(Long.MaxValue, TimeUnit.MILLISECONDS)
+      try  {
+        this.workerPool.awaitTermination(Constants.ShutDownWait, TimeUnit.SECONDS)
+        this.workerPool.shutdownNow
+        Scheduler.Status = SchedulerStatus.INTERRUPTED
+      }
       catch {
-        case _: InterruptedException => this.workerPool.shutdownNow
+        case _: InterruptedException =>
+          Scheduler.Status = SchedulerStatus.INTERRUPTED
+          this.workerPool.shutdownNow
       }
     }
+    Try {
+      this.syncProcessedTaskInformationNow()
+    }
+    LOG.info("All workers shut-down. Unfinished tasks: {} at {}", SchedulerService.UnfinishedTasks, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))
   }
 
   class Handler(task: TaskDetails) extends Runnable {
@@ -168,7 +211,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
         }
       }
       catch {
-        case e: Exception => LOG.error("Failed to process task: {}", task.id, e)
+        case e: Exception =>
+          if(workConfig.logFailures) {
+            LOG.error("Failed to process task: {}", task.id, e)
+          }
           onFailure(task)
       }
       finally {
@@ -178,7 +224,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
     private def onEventuality(): Unit = {
       SchedulerService.UnfinishedTasks.remove(task.id)
-      if(SchedulerService.UnfinishedTasks.size < workerConfig.workers && SchedulerService.HadReceivedPlenty) {
+      if(SchedulerService.UnfinishedTasks.size < workConfig.workers && SchedulerService.HadReceivedPlenty) {
         process()
       }
     }
@@ -187,13 +233,14 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 }
 
 object SchedulerService {
+
   val UnfinishedTasks: mutable.Set[Long] = mutable.Set()
   val GlobalWorkLockId: String = "scheduler:WORK_ACQUISITION_LOCK"
   val GlobalCleanupLockId: String = "scheduler:CLEANUP_LOCK"
   val LockLife: Int = 60
 
-  val SuccessTracker: mutable.Map[Long, TaskSuccessData] = mutable.Map()
-  val FailureTracker: mutable.Map[Long, Date] = mutable.Map()
+  val SuccessTracker: mutable.Map[Long, ExecutionResponseData] = mutable.Map()
+  val FailureTracker: mutable.Map[Long, ExecutionResponseData] = mutable.Map()
 
   /**
    * In seconds
