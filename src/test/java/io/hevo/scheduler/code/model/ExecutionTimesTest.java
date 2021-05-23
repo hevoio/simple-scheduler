@@ -7,7 +7,6 @@ import io.hevo.scheduler.dto.task.CronTask;
 import io.hevo.scheduler.dto.task.RepeatableTask;
 import io.hevo.scheduler.util.Util;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Test;
 import scala.concurrent.duration.Duration;
 
@@ -16,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ExecutionTimesTest {
 
-    @Test @Ignore
+    @Test
     public void testRepeatable() {
         RepeatableTask repeatableTask = new RepeatableTask("NS-1", "Key-1", Duration.apply(50, TimeUnit.SECONDS), "io.hevo.scheduler.jobs.SimpleJob1");
         RepeatableTaskDetails repeatableTaskDetails = (RepeatableTaskDetails) TaskMapper.toTaskDetails(repeatableTask);

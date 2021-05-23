@@ -68,6 +68,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
         LOG.debug("Attempting to request: {} tasks", requestSize)
         if(requestSize > 0) {
           val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.EXECUTABLE_STATUSES, requestSize, workConfig.maxLookAheadTime)
+          // The check on requestSize >= workConfig.workers is required so that fetch attempts don't go on in very short loops
           SchedulerService.HadReceivedPlenty = tasks.size == requestSize && requestSize >= workConfig.workers
           tasks.foreach(task => {
             SchedulerService.UnfinishedTasks.add(task.id)
