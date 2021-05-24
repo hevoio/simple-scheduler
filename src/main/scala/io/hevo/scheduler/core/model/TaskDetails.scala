@@ -26,7 +26,6 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
   def schedule(): Any
 
   def discriminator(): TaskType.TaskType
-  def qualifiedName(): String = TaskDetails.toQualifiedName(namespace, key)
 
   def primaryParameters(): String = {
     "%s_%s".format(handlerClassName, scheduleExpression)
@@ -39,23 +38,5 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
   def calculateNextExecutionTime(reference: Date): Date = {
     val deltaFromNow: Long = System.currentTimeMillis() + Util.secondsToMillis(SchedulerService.MinJobExecutionGap)
     if(reference.getTime < deltaFromNow) new Date(deltaFromNow) else reference
-  }
-}
-
-object TaskDetails {
-  val Separator = "___"
-  val QualifiedNameTemplate: String = "%s%s%s"
-
-  def toQualifiedName(namespace: String, key: String): String = {
-    QualifiedNameTemplate.format(namespace, Separator, key)
-  }
-
-  def fromQualifiedName(qualifiedName: String): (String, String) = {
-    val components: Array[String] = qualifiedName.split(Separator, 2)
-    (components.apply(0), components.apply(1))
-  }
-
-  def namespaceWithSeparator(namespace: String): String = {
-    namespace + Separator
   }
 }

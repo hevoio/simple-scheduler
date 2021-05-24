@@ -1,7 +1,8 @@
  CREATE TABLE `mysql_scheduled_tasks` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT,
   `type` varchar(32) NOT NULL,
-  `name` varchar(64) NOT NULL,
+  `namespace` varchar(32) NOT NULL,
+  `name` varchar(256) NOT NULL,
   `handler_class` varchar(128) NOT NULL,
   `schedule_expression` varchar(32) NOT NULL,
   `parameters` varchar(512) NULL,
@@ -16,6 +17,6 @@
   `created_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `UQ_name` (`name`),
+  UNIQUE KEY `UQ_namespace_name` (`namespace`, `name`),
   KEY `IDX_next_execution` (`next_execution_time`)
 );

@@ -28,8 +28,8 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
 
   def add(tasks: List[TaskDetails]): Unit = {
     if(tasks.nonEmpty) {
-      val sql = ("INSERT INTO %s(type, name, handler_class, schedule_expression, parameters, status, execution_time, next_execution_time) " +
-        "VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) " +
+      val sql = ("INSERT INTO %s(type, namespace, name, handler_class, schedule_expression, parameters, status, execution_time, next_execution_time) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) " +
         "ON DUPLICATE KEY UPDATE schedule_expression = ?, parameters = ?, handler_class = ?, next_execution_time = FROM_UNIXTIME(?)").format(applicableTable(TaskRepository.tasksTable))
       super.batchUpdate(
         sql,
@@ -37,7 +37,8 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
         (task: TaskDetails, statement: PreparedStatement) => {
           val counter: AtomicInteger = new AtomicInteger()
           statement.setString(counter.incrementAndGet(), task.discriminator().toString)
-          statement.setString(counter.incrementAndGet(), task.qualifiedName())
+          statement.setString(counter.incrementAndGet(), task.namespace)
+          statement.setString(counter.incrementAndGet(), task.key)
           statement.setString(counter.incrementAndGet(), task.handlerClassName)
           statement.setString(counter.incrementAndGet(), task.scheduleExpression)
           statement.setString(counter.incrementAndGet(), task.parameters)
@@ -55,13 +56,13 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   def get(namespace: String, keys: List[String]): Map[String, TaskDetails] = {
     var map: Map[String, TaskDetails] = Map()
     if(keys.nonEmpty) {
-      val qualifiedNames: List[String] = keys.map(key => TaskDetails.toQualifiedName(namespace, key))
-      val sql: String = "SELECT * FROM %s WHERE name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
+      val sql: String = "SELECT * FROM %s WHERE namespace = ? AND name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
       val results = super.query(
         sql,
         statement => {
           val counter: AtomicInteger = new AtomicInteger()
-          qualifiedNames.foreach(qualifiedName => statement.setString(counter.incrementAndGet(), qualifiedName))
+          statement.setString(counter.incrementAndGet(), namespace)
+          keys.foreach(key => statement.setString(counter.incrementAndGet(), key))
         },
         resultSet => TaskMapper.toTaskDetails(resultSet)
       )
@@ -72,13 +73,13 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
 
   def delete(namespace: String, keys: List[String]):Unit = {
     if(keys.nonEmpty) {
-      val qualifiedNames: List[String] = keys.map(key => TaskDetails.toQualifiedName(namespace, key))
-      val sql: String = "DELETE FROM %s WHERE name in (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(qualifiedNames.length)("?").mkString(","))
+      val sql: String = "DELETE FROM %s WHERE namespace = ? AND name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
       super.update(
         sql,
         statement => {
           val counter: AtomicInteger = new AtomicInteger()
-          qualifiedNames.foreach(qualifiedName => statement.setString(counter.incrementAndGet(), qualifiedName))
+          statement.setString(counter.incrementAndGet(), namespace)
+          keys.foreach(key => statement.setString(counter.incrementAndGet(), key))
         }
       )
     }
@@ -108,13 +109,12 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   }
 
   def fetchAll(namespace: String): List[String] = {
-    val sql: String = "SELECT name FROM %s WHERE name LIKE '%' || ?".format(applicableTable(TaskRepository.tasksTable))
-    val qualifiedNames: List[String] = super.query(
+    val sql: String = "SELECT name FROM %s WHERE namespace = ?".format(applicableTable(TaskRepository.tasksTable))
+    super.query(
       sql,
-      statement => statement.setString(1, TaskDetails.namespaceWithSeparator(namespace)),
+      statement => statement.setString(1, namespace),
       resultSet => resultSet.getString(Constants.fieldName)
     )
-    qualifiedNames.map(qualifiedName => TaskDetails.fromQualifiedName(qualifiedName)._2)
   }
 
   def markPicked(ids: List[Long], executorId: String): Unit = {
@@ -147,15 +147,15 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   }
 
   def updateNextExecutionTime(namespace: String, key: String, nextExecutionTime: Date): Unit = {
-    val qualifiedName: String = TaskDetails.toQualifiedName(namespace, key)
-    val sql: String = "UPDATE %s SET status = ?, next_execution_time = FROM_UNIXTIME(?) WHERE name = ? AND status <> ?".format(applicableTable(TaskRepository.tasksTable))
+    val sql: String = "UPDATE %s SET status = ?, next_execution_time = FROM_UNIXTIME(?) WHERE namespace = ? AND name = ? AND status <> ?".format(applicableTable(TaskRepository.tasksTable))
     super.update(
       sql,
       statement => {
         val counter: AtomicInteger = new AtomicInteger()
         statement.setString(counter.incrementAndGet(), TaskStatus.SUCCEEDED.toString)
         statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(nextExecutionTime.getTime))
-        statement.setString(counter.incrementAndGet(), qualifiedName)
+        statement.setString(counter.incrementAndGet(), namespace)
+        statement.setString(counter.incrementAndGet(), key)
         statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
       }
     )
@@ -218,10 +218,11 @@ object TaskMapper {
 
     val taskType: TaskType = TaskType.withName(resultSet.getString(Constants.fieldType))
 
-    val namespaceKeyTuple: (String, String) = TaskDetails.fromQualifiedName(resultSet.getString(Constants.fieldName))
+    val namespace: String = resultSet.getString(Constants.fieldNamespace)
+    val key: String = resultSet.getString(Constants.fieldName)
     val scheduleExpression: String = resultSet.getString(Constants.fieldScheduleExpression)
     val handlerClassName: String = resultSet.getString(Constants.fieldHandlerClass)
-    val task: TaskDetails = if(TaskType.CRON == taskType) CronTaskDetails(namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression, handlerClassName) else RepeatableTaskDetails(namespaceKeyTuple._1, namespaceKeyTuple._2, scheduleExpression, handlerClassName)
+    val task: TaskDetails = if(TaskType.CRON == taskType) CronTaskDetails(namespace, key, scheduleExpression, handlerClassName) else RepeatableTaskDetails(namespace, key, scheduleExpression, handlerClassName)
 
     task.id = resultSet.getLong(Constants.fieldId)
     task.parameters = resultSet.getString(Constants.fieldParameters)

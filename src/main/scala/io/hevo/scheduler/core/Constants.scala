@@ -4,6 +4,7 @@ object Constants {
   val fieldTableName: String = "table_name"
   val fieldId: String = "id"
   val fieldIds: String = "ids"
+  val fieldNamespace: String = "namespace"
   val fieldName: String = "name"
   val fieldParameters: String = "parameters"
 

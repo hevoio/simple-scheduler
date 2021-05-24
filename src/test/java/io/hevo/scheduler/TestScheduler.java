@@ -9,6 +9,7 @@ import io.hevo.scheduler.dto.task.CronTask;
 import io.hevo.scheduler.dto.task.RepeatableTask;
 import io.hevo.scheduler.helpers.MySqlHelper;
 import io.hevo.scheduler.helpers.profile.EmbeddedMySql;
+import io.hevo.scheduler.helpers.profile.LocalMySql;
 import io.hevo.scheduler.jobs.SampleLongRunningJob;
 import io.hevo.scheduler.jobs.SampleInstantaneousJob;
 import io.hevo.scheduler.lock.Lock;
@@ -39,8 +40,8 @@ public class TestScheduler {
 
     @BeforeClass
     public static void before() {
-        // mySqlHelper = new MySqlHelper(new LocalMySql());
-        mySqlHelper = new MySqlHelper(new EmbeddedMySql());
+        mySqlHelper = new MySqlHelper(new LocalMySql());
+        // mySqlHelper = new MySqlHelper(new EmbeddedMySql());
         mySqlHelper.mySqlProfile.start();
         dataSource = mySqlHelper.createDataSource();
         taskRepository = new TaskRepository(dataSource, TABLE_PREFIX);
@@ -67,6 +68,7 @@ public class TestScheduler {
         scheduler.schedulerRegistry().register(new CronTask(NS, "Cron-1", "0/6 * * * * ?", JOB_INSTANTANEOUS_FQCN));
         scheduler.start();
         Thread.sleep(SLEEP_DURATION);
+        Assert.assertEquals(7, scheduler.jobKeys(NS).size());
         scheduler.stop();
         validateTasks();
     }
