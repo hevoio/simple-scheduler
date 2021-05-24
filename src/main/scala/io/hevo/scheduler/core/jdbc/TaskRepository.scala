@@ -30,7 +30,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
     if(tasks.nonEmpty) {
       val sql = ("INSERT INTO %s(type, name, handler_class, schedule_expression, parameters, status, execution_time, next_execution_time) " +
         "VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) " +
-        "ON DUPLICATE KEY UPDATE schedule_expression = ?, parameters = ?, handler_class = ?, next_execution_time = FROM_UNIXTIME(?), status = ?").format(applicableTable(TaskRepository.tasksTable))
+        "ON DUPLICATE KEY UPDATE schedule_expression = ?, parameters = ?, handler_class = ?, next_execution_time = FROM_UNIXTIME(?)").format(applicableTable(TaskRepository.tasksTable))
       super.batchUpdate(
         sql,
         tasks,
@@ -47,7 +47,6 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
           statement.setString(counter.incrementAndGet(), task.parameters)
           statement.setString(counter.incrementAndGet(), task.handlerClassName)
           statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.nextExecutionTime.getTime))
-          statement.setString(counter.incrementAndGet(), task.status.toString)
         }
       )
     }
@@ -108,6 +107,16 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
     super.query(sql, _ => {}, resultSet => TaskMapper.toTaskDetails(resultSet))
   }
 
+  def fetchAll(namespace: String): List[String] = {
+    val sql: String = "SELECT name FROM %s WHERE name LIKE '%' || ?".format(applicableTable(TaskRepository.tasksTable))
+    val qualifiedNames: List[String] = super.query(
+      sql,
+      statement => statement.setString(1, TaskDetails.namespaceWithSeparator(namespace)),
+      resultSet => resultSet.getString(Constants.fieldName)
+    )
+    qualifiedNames.map(qualifiedName => TaskDetails.fromQualifiedName(qualifiedName)._2)
+  }
+
   def markPicked(ids: List[Long], executorId: String): Unit = {
     if(ids.nonEmpty) {
       val sql: String = "UPDATE %s SET status = ?, executor_id = ?, picked_at = NOW(), executions = executions + 1 WHERE id IN (%s)"
@@ -133,6 +142,21 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
         statement.setString(counter.incrementAndGet(), toStatus.toString)
         statement.setString(counter.incrementAndGet(), executorId)
         statement.setString(counter.incrementAndGet(), fromStatus.toString)
+      }
+    )
+  }
+
+  def updateNextExecutionTime(namespace: String, key: String, nextExecutionTime: Date): Unit = {
+    val qualifiedName: String = TaskDetails.toQualifiedName(namespace, key)
+    val sql: String = "UPDATE %s SET status = ?, next_execution_time = FROM_UNIXTIME(?) WHERE name = ? AND status <> ?".format(applicableTable(TaskRepository.tasksTable))
+    super.update(
+      sql,
+      statement => {
+        val counter: AtomicInteger = new AtomicInteger()
+        statement.setString(counter.incrementAndGet(), TaskStatus.SUCCEEDED.toString)
+        statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(nextExecutionTime.getTime))
+        statement.setString(counter.incrementAndGet(), qualifiedName)
+        statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
       }
     )
   }
@@ -164,7 +188,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
 
   private def updateStatus(sql: String, data: List[ExecutionResponseData]): Unit = {
     if(data.nonEmpty) {
-      data.foreach(record => LOG.info("Id: {} Status: {} at {}", record.id, record.targetStatus, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
+      data.foreach(record => LOG.info("Id: %d Status: %s at %s".format(record.id, record.targetStatus.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))))
       super.batchUpdate(
         sql,
         data,

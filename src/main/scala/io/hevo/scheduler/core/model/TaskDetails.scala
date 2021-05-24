@@ -43,14 +43,19 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
 }
 
 object TaskDetails {
-  val qualifiedNameTemplate: String = "%s___%s"
+  val Separator = "___"
+  val QualifiedNameTemplate: String = "%s%s%s"
 
   def toQualifiedName(namespace: String, key: String): String = {
-    qualifiedNameTemplate.format(namespace, key)
+    QualifiedNameTemplate.format(namespace, Separator, key)
   }
 
   def fromQualifiedName(qualifiedName: String): (String, String) = {
-    val components: Array[String] = qualifiedName.split("___", 2)
+    val components: Array[String] = qualifiedName.split(Separator, 2)
     (components.apply(0), components.apply(1))
+  }
+
+  def namespaceWithSeparator(namespace: String): String = {
+    namespace + Separator
   }
 }

@@ -83,13 +83,15 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
     finally {
       if(lockAcquired) {
-        Util.throwOnError(Try {
-          lockHandler.release(SchedulerService.GlobalWorkLockId)
-        })
+        lockHandler.release(SchedulerService.GlobalWorkLockId)
       }
     }
     this.trySyncingProcessedTaskInformation()
     lockAcquired
+  }
+
+  def triggerRun(namespace: String, key: String): Unit = {
+    taskRepository.updateNextExecutionTime(namespace, key, new Date())
   }
 
   def onSuccess(task: TaskDetails, executionStatus: ExecutionStatus.Status): Unit = {
@@ -179,7 +181,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
   override def close(): Unit = {
     Scheduler.Status = SchedulerStatus.STOPPING
-    LOG.info("Scheduler is shutting down. Unfinished tasks: {} at {}", SchedulerService.UnfinishedTasks, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))
+    LOG.info("Scheduler is shutting down. Unfinished tasks: %s at %s".format(SchedulerService.UnfinishedTasks.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
     if(null != this.workerPool && !this.workerPool.isShutdown) {
       this.workerPool.shutdown()
       try  {
@@ -196,7 +198,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     Try {
       this.syncProcessedTaskInformationNow()
     }
-    LOG.info("All workers shut-down. Unfinished tasks: {} at {}", SchedulerService.UnfinishedTasks, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))
+    LOG.info("All workers shut-down. Unfinished tasks: %s at %s".format(SchedulerService.UnfinishedTasks.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
   }
 
   class Handler(task: TaskDetails) extends Runnable {

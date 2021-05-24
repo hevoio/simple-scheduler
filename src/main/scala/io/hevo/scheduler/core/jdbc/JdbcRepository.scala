@@ -1,58 +1,81 @@
 package io.hevo.scheduler.core.jdbc
 
-import java.sql.{PreparedStatement, ResultSet}
+import java.sql.{Connection, PreparedStatement, ResultSet}
 
-import io.hevo.scheduler.util.Util
 import javax.sql.DataSource
 
 import scala.collection.mutable
-import scala.util.{Try, Using}
 
 abstract class JdbcRepository(dataSource: DataSource) {
 
   def update(sql: String, applyParameters: PreparedStatement => Unit): Unit = {
-    Util.throwOnError(Using(this.dataSource.getConnection) {
-      connection =>
-        Util.throwOnError(Using(connection.prepareStatement(sql)) {
-          statement => {
-            applyParameters(statement)
-            statement.execute()
-          }
-        })
-    })
+    var connection: Connection = null
+    try {
+      connection = this.dataSource.getConnection()
+      var statement: PreparedStatement = null
+      try {
+        statement = connection.prepareStatement(sql)
+        applyParameters(statement)
+        statement.execute()
+      }
+      finally {
+        statement.close()
+      }
+    }
+    finally {
+      connection.close()
+    }
   }
 
   def batchUpdate[T](sql: String, inputs: List[T], applyParameters: (T, PreparedStatement) => Unit): Unit = {
-    Util.throwOnError(Using(this.dataSource.getConnection) {
-      connection =>
-        Util.throwOnError(Using(connection.prepareStatement(sql)) {
-          statement => {
-            inputs.foreach(input => {
-              applyParameters(input, statement)
-              statement.addBatch()
-            })
-            statement.executeBatch()
-          }
+    var connection: Connection = null
+    try {
+      connection = this.dataSource.getConnection()
+      var statement: PreparedStatement = null
+      try {
+        statement = connection.prepareStatement(sql)
+        inputs.foreach(input => {
+          applyParameters(input, statement)
+          statement.addBatch()
         })
-    })
+        statement.executeBatch()
+      }
+      finally {
+        statement.close()
+      }
+    }
+    finally {
+      connection.close()
+    }
   }
 
   def query[T](sql: String, applyParameters: PreparedStatement => Unit, translate: ResultSet => T): List[T] = {
     val list: mutable.ListBuffer[T] = mutable.ListBuffer()
-    Util.throwOnError(Using(this.dataSource.getConnection) {
-      connection =>
-        Util.throwOnError(Using(connection.prepareStatement(sql)) {
-          statement => {
-            applyParameters(statement)
-            Util.throwOnError(Using(statement.executeQuery()) {
-              resultSet =>
-                while (resultSet.next) {
-                  list += translate(resultSet)
-                }
-            })
+    var connection: Connection = null
+    try {
+      connection = this.dataSource.getConnection()
+      var statement: PreparedStatement = null
+      try {
+        statement = connection.prepareStatement(sql)
+        applyParameters(statement)
+        var resultSet: ResultSet = null
+        try {
+          resultSet = statement.executeQuery()
+          while (resultSet.next) {
+            list += translate(resultSet)
           }
-        })
-    })
+        }
+        finally {
+          resultSet.close()
+        }
+      }
+      finally {
+        statement.close()
+      }
+    }
+    finally {
+      connection.close()
+    }
     list.toList
   }
 }

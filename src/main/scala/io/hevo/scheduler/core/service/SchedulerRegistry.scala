@@ -35,9 +35,13 @@ class SchedulerRegistry(taskRepository: TaskRepository) {
     tasks.foreach(task => task.resolveClass())
   }
 
+  def fetchKeys(namespace: String): List[String] = {
+    taskRepository.fetchAll(namespace)
+  }
+
   def deRegister(namespace: String, key: String): Unit = {
     taskRepository.delete(namespace, List(key))
-    LOG.info("De-registered task with Namespace: {} Key: {}", namespace, key)
+    LOG.info("De-registered task with Namespace: %s Key: %s".format(namespace, key))
   }
 
   def nextExecutionTime(namespace: String, key: String): Date = {
