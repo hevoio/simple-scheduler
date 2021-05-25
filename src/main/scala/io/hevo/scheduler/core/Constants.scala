@@ -28,6 +28,6 @@ object Constants {
 
   val DefaultNamespace = "DEFAULT"
 
-  val InitialDelay: Long = 0
-  val ShutDownWait: Long = 2 // 45
+  val InitialDelay: Long = 5
+  val ShutDownWait: Long = 45
 }

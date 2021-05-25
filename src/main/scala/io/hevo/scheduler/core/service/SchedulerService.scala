@@ -1,6 +1,5 @@
 package io.hevo.scheduler.core.service
 
-import java.text.SimpleDateFormat
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ExecutorService, Executors, ThreadFactory, TimeUnit}
 import java.util.{Date, Optional}
@@ -70,16 +69,16 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
           val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.EXECUTABLE_STATUSES, requestSize, workConfig.maxLookAheadTime)
           // The check on requestSize >= workConfig.workers is required so that fetch attempts don't go on in very short loops
           SchedulerService.HadReceivedPlenty = tasks.size == requestSize && requestSize >= workConfig.workers
+          taskRepository.markPicked(tasks.map(_.id), workConfig.appId)
           tasks.foreach(task => {
             SchedulerService.UnfinishedTasks.add(task.id)
             this.workerPool.submit(new Handler(task))
           })
-          taskRepository.markPicked(tasks.map(_.id), workConfig.appId)
         }
       }
     }
     catch {
-      case e: Exception => LOG.error("Failed to find the jobs to process", e)
+      case e: Throwable => LOG.error("Failed to find the jobs to process", e)
     }
     finally {
       if(lockAcquired) {
@@ -181,7 +180,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
   override def close(): Unit = {
     Scheduler.Status = SchedulerStatus.STOPPING
-    LOG.info("Scheduler is shutting down. Unfinished tasks: %s at %s".format(SchedulerService.UnfinishedTasks.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
+    LOG.info("Scheduler is shutting down. Unfinished tasks: %s".format(SchedulerService.UnfinishedTasks.toString))
     if(null != this.workerPool && !this.workerPool.isShutdown) {
       this.workerPool.shutdown()
       try  {
@@ -198,7 +197,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     Try {
       this.syncProcessedTaskInformationNow()
     }
-    LOG.info("All workers shut-down. Unfinished tasks: %s at %s".format(SchedulerService.UnfinishedTasks.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date())))
+    LOG.info("All workers shut-down. Unfinished tasks: %s".format(SchedulerService.UnfinishedTasks.toString))
   }
 
   class Handler(task: TaskDetails) extends Runnable {
@@ -214,9 +213,9 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
         }
       }
       catch {
-        case e: Exception =>
+        case e: Throwable =>
           if(workConfig.logFailures) {
-            LOG.error("Failed to process task: {}", task.id, e)
+            LOG.error("Failed to process task: %d".format(task.id), e)
           }
           onFailure(task)
       }

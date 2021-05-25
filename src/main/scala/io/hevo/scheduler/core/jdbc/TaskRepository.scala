@@ -1,7 +1,6 @@
 package io.hevo.scheduler.core.jdbc
 
 import java.sql.{PreparedStatement, ResultSet}
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -188,7 +187,6 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
 
   private def updateStatus(sql: String, data: List[ExecutionResponseData]): Unit = {
     if(data.nonEmpty) {
-      data.foreach(record => LOG.info("Id: %d Status: %s at %s".format(record.id, record.targetStatus.toString, new SimpleDateFormat("dd-MMM hh:mm:ss:SSS").format(new Date()))))
       super.batchUpdate(
         sql,
         data,
