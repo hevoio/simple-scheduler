@@ -36,6 +36,8 @@ class WorkConfig(_appId: String) {
 
   var logFailures: Boolean = true
 
+  var shutDownWait: Long = 45
+
   /**
    * In case the next execution should be referenced to the current time. Default is false where the next execution is calculated in reference to the previous scheduled time
    * If true, the next execution is in reference to the current execution completion instant
@@ -74,6 +76,11 @@ class WorkConfig(_appId: String) {
 
   def logFailures(logFailures: Boolean): WorkConfig = {
     this.logFailures = logFailures
+    this
+  }
+
+  def shutDownWait(shutDownWait: Long): WorkConfig = {
+    this.shutDownWait = shutDownWait
     this
   }
 

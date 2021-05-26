@@ -52,7 +52,10 @@ class Scheduler private {
 
     if(null != this.monitor) {
       this.monitor.shutdown()
-      try this.monitor.awaitTermination(Constants.ShutDownWait, TimeUnit.SECONDS)
+      try {
+        this.monitor.awaitTermination(Constants.InitialDelay, TimeUnit.SECONDS)
+        this.monitor.shutdownNow
+      }
       catch {
         case _: InterruptedException => this.monitor.shutdownNow
       }

@@ -6,7 +6,6 @@ import java.util.{Date, Optional}
 
 import io.hevo.scheduler.{ExecutionStatus, Job, Scheduler, SchedulerStatus}
 import io.hevo.scheduler.config.WorkConfig
-import io.hevo.scheduler.core.Constants
 import io.hevo.scheduler.core.jdbc.TaskRepository
 import io.hevo.scheduler.core.model.{TaskDetails, TaskStatus}
 import io.hevo.scheduler.dto.{ExecutionContext, ExecutionResponseData}
@@ -180,11 +179,11 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
   override def close(): Unit = {
     Scheduler.Status = SchedulerStatus.STOPPING
-    LOG.info("Scheduler is shutting down. Unfinished tasks: %s".format(SchedulerService.UnfinishedTasks.toString))
+    LOG.info("Scheduler is shutting down. Unfinished tasks: {}", SchedulerService.UnfinishedTasks.toString)
     if(null != this.workerPool && !this.workerPool.isShutdown) {
       this.workerPool.shutdown()
       try  {
-        this.workerPool.awaitTermination(Constants.ShutDownWait, TimeUnit.SECONDS)
+        this.workerPool.awaitTermination(workConfig.shutDownWait, TimeUnit.SECONDS)
         this.workerPool.shutdownNow
         Scheduler.Status = SchedulerStatus.INTERRUPTED
       }
@@ -197,10 +196,11 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     Try {
       this.syncProcessedTaskInformationNow()
     }
-    LOG.info("All workers shut-down. Unfinished tasks: %s".format(SchedulerService.UnfinishedTasks.toString))
+    LOG.info("All workers shut-down. Unfinished tasks: {}", SchedulerService.UnfinishedTasks.toString)
   }
 
   class Handler(task: TaskDetails) extends Runnable {
+    LOG.debug("Metrics. Task: %s-%s Delay (in seconds): %d".format(task.namespace, task.key,  Util.millisToSeconds(System.currentTimeMillis() - task.nextExecutionTime.getTime)))
     override def run(): Unit = {
       try {
         val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
@@ -215,7 +215,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
       catch {
         case e: Throwable =>
           if(workConfig.logFailures) {
-            LOG.error("Failed to process task: %d".format(task.id), e)
+            LOG.error("Failed to process task: {}", task.id, e)
           }
           onFailure(task)
       }

@@ -5,6 +5,7 @@ import io.hevo.scheduler.core.model.CronTaskDetails;
 import io.hevo.scheduler.core.model.RepeatableTaskDetails;
 import io.hevo.scheduler.dto.task.CronTask;
 import io.hevo.scheduler.dto.task.RepeatableTask;
+import io.hevo.scheduler.jobs.SampleInstantaneousJob;
 import io.hevo.scheduler.util.Util;
 import org.junit.Assert;
 import org.junit.Test;
@@ -17,7 +18,7 @@ public class ExecutionTimesTest {
 
     @Test
     public void testRepeatable() {
-        RepeatableTask repeatableTask = new RepeatableTask("NS-1", "Key-1", Duration.apply(50, TimeUnit.SECONDS), "io.hevo.scheduler.jobs.SimpleJob1");
+        RepeatableTask repeatableTask = new RepeatableTask("NS-1", "Key-1", Duration.apply(50, TimeUnit.SECONDS), SampleInstantaneousJob.class.getCanonicalName());
         RepeatableTaskDetails repeatableTaskDetails = (RepeatableTaskDetails) TaskMapper.toTaskDetails(repeatableTask);
         // The first execution is immediate (now)
         assertInRange(repeatableTaskDetails.nextExecutionTime(), -2, 2);
@@ -31,7 +32,7 @@ public class ExecutionTimesTest {
 
     @Test
     public void testCron() {
-        CronTask cronTask = new CronTask("NS-1", "Key-1", "0/30 * * * * ?", "io.hevo.scheduler.jobs.SimpleJob1");
+        CronTask cronTask = new CronTask("NS-1", "Key-1", "0/30 * * * * ?", SampleInstantaneousJob.class.getCanonicalName());
         CronTaskDetails cronTaskDetails = (CronTaskDetails) TaskMapper.toTaskDetails(cronTask);
         // The first execution is immediate (now)
         assertInRange(cronTaskDetails.nextExecutionTime(), -2, 2);
@@ -42,6 +43,12 @@ public class ExecutionTimesTest {
         referenceDate = new Date(1590217151000L);  // May 23 2020 12:29:11 (Past)
         assertInRange(cronTaskDetails.calculateNextExecutionTime(referenceDate), 3, 7);
 
+        // Once every 8 hours
+        cronTask = new CronTask("NS-1", "Key-1", "0 0 0/8 1/1 * ? *", SampleInstantaneousJob.class.getCanonicalName());
+        cronTaskDetails = (CronTaskDetails) TaskMapper.toTaskDetails(cronTask);
+        Date nextExecutionTime = cronTaskDetails.calculateNextExecutionTime(new Date());
+        long diff = Util.millisToSeconds(cronTaskDetails.calculateNextExecutionTime(nextExecutionTime).getTime() - nextExecutionTime.getTime());
+        Assert.assertTrue(Math.abs(diff - 8 * 3600) <= 2);
     }
 
     private void assertInRange(Date toCheck, int afterSeconds, int beforeSeconds) {

@@ -31,7 +31,7 @@ public class TestScheduler {
     private static final String NS = "NS";
     private static final String JOB_LONG_RUNNING_FQCN = SampleLongRunningJob.class.getCanonicalName();
     private static final String JOB_INSTANTANEOUS_FQCN = SampleInstantaneousJob.class.getCanonicalName();
-    private static final long SLEEP_DURATION = 18_000L;
+    private static final long SLEEP_DURATION = 20_000L;
 
     private static MySqlHelper mySqlHelper;
     private static DataSource dataSource;
@@ -40,8 +40,8 @@ public class TestScheduler {
 
     @BeforeClass
     public static void before() {
-        mySqlHelper = new MySqlHelper(new LocalMySql());
-        // mySqlHelper = new MySqlHelper(new EmbeddedMySql());
+        // mySqlHelper = new MySqlHelper(new LocalMySql());
+        mySqlHelper = new MySqlHelper(new EmbeddedMySql());
         mySqlHelper.mySqlProfile.start();
         dataSource = mySqlHelper.createDataSource();
         taskRepository = new TaskRepository(dataSource, TABLE_PREFIX);
@@ -53,7 +53,7 @@ public class TestScheduler {
 
     @Test
     public void test() throws Exception {
-        WorkConfig workConfig = new WorkConfig("host_name_1").logFailures(false);
+        WorkConfig workConfig = new WorkConfig("host_name_1").logFailures(false).shutDownWait(3);
         // Lock lock = RedisLockProvider.createLock("localhost", 6379);
         SchedulerConfig schedulerConfig = new SchedulerConfig(dataSource, workConfig).withTablePrefix(TABLE_PREFIX).withPollFrequency(2); //.withLock(lock);
         Scheduler scheduler = new Scheduler(schedulerConfig, jobResolver);
@@ -62,7 +62,7 @@ public class TestScheduler {
             scheduler.schedulerRegistry().register(new RepeatableTask(NS, key, Duration.apply(300, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN).withParameters(key));
         }
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Key-9", Duration.apply(300, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN).withParameters("Key-9"));
-        scheduler.schedulerRegistry().register(new RepeatableTask(NS, "FAIL_IMMEDIATELY", Duration.apply(20, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN).withParameters("FAIL_IMMEDIATELY"));
+        scheduler.schedulerRegistry().register(new RepeatableTask(NS, "FAIL_IMMEDIATELY", Duration.apply(7, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN).withParameters("FAIL_IMMEDIATELY"));
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Key-1", Duration.apply(11, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN));
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Key-2", Duration.apply(7, TimeUnit.SECONDS), JOB_INSTANTANEOUS_FQCN));
         scheduler.schedulerRegistry().register(new CronTask(NS, "Cron-1", "0/6 * * * * ?", JOB_INSTANTANEOUS_FQCN));
