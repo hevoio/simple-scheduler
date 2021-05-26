@@ -53,7 +53,7 @@ public class TestScheduler {
 
     @Test
     public void test() throws Exception {
-        WorkConfig workConfig = new WorkConfig("host_name_1").logFailures(false).shutDownWait(3);
+        WorkConfig workConfig = new WorkConfig("host_name_1").logFailures(true).shutDownWait(3);
         // Lock lock = RedisLockProvider.createLock("localhost", 6379);
         SchedulerConfig schedulerConfig = new SchedulerConfig(dataSource, workConfig).withTablePrefix(TABLE_PREFIX).withPollFrequency(2); //.withLock(lock);
         Scheduler scheduler = new Scheduler(schedulerConfig, jobResolver);

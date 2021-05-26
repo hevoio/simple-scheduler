@@ -62,15 +62,16 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     try {
       lockAcquired = lockHandler.acquire(SchedulerService.GlobalWorkLockId, SchedulerService.LockLife)
       if(lockAcquired) {
-        val requestSize: Int = workConfig.tasksToRequest(SchedulerService.UnfinishedTasks.size)
-        LOG.debug("Attempting to request: {} tasks", requestSize)
+        val requestSize: Int = workConfig.tasksToRequest(SchedulerService.UnfinishedTasks.iterator.size)
+        LOG.debug("Attempting to request: {} tasks. Unfinished tasks: {}", requestSize, SchedulerService.UnfinishedTasks.toString)
         if(requestSize > 0) {
           val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.EXECUTABLE_STATUSES, requestSize, workConfig.maxLookAheadTime)
           // The check on requestSize >= workConfig.workers is required so that fetch attempts don't go on in very short loops
           SchedulerService.HadReceivedPlenty = tasks.size == requestSize && requestSize >= workConfig.workers
           taskRepository.markPicked(tasks.map(_.id), workConfig.appId)
           tasks.foreach(task => {
-            SchedulerService.UnfinishedTasks.add(task.id)
+            val result: Boolean = SchedulerService.UnfinishedTasks.add(task.id)
+            LOG.debug("Added to Unfinished Tasks: {} with success: {}", task.id, result)
             this.workerPool.submit(new Handler(task))
           })
         }
@@ -93,6 +94,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onSuccess(task: TaskDetails, executionStatus: ExecutionStatus.Status): Unit = {
+    removeUnfinishedTaskEntry(task)
     if(ExecutionStatus.OBSOLETE.equals(executionStatus)) {
       schedulerRegistry.deRegister(task.namespace, task.key)
     }
@@ -105,6 +107,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onFailure(task: TaskDetails): Unit = {
+    removeUnfinishedTaskEntry(task)
     SchedulerService.FailureTracker.put(task.id, failureData(task))
     if(!workConfig.batchUpdates) {
       this.syncProcessedTaskInformationNow()
@@ -112,7 +115,13 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onMissingHandler(task: TaskDetails): Unit = {
+    removeUnfinishedTaskEntry(task)
     this.schedulerRegistry.deRegister(task.namespace, task.key)
+  }
+
+  def removeUnfinishedTaskEntry(task: TaskDetails): Unit = {
+    val result: Boolean = SchedulerService.UnfinishedTasks.remove(task.id)
+    LOG.debug("Removed from Unfinished Tasks: {} with success: {}", task.id, result)
   }
 
   private def trySyncingProcessedTaskInformation(): Unit = {
@@ -213,11 +222,12 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
         }
       }
       catch {
-        case e: Throwable =>
-          if(workConfig.logFailures) {
+        case e: Throwable => {
+          onFailure(task)
+          if (workConfig.logFailures) {
             LOG.error("Failed to process task: {}", task.id, e)
           }
-          onFailure(task)
+        }
       }
       finally {
         this.onEventuality()
@@ -225,8 +235,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
 
     private def onEventuality(): Unit = {
-      SchedulerService.UnfinishedTasks.remove(task.id)
-      if(SchedulerService.UnfinishedTasks.size < workConfig.workers && SchedulerService.HadReceivedPlenty) {
+      if(SchedulerService.UnfinishedTasks.iterator.size < workConfig.workers && SchedulerService.HadReceivedPlenty) {
         process()
       }
     }

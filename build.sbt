@@ -1,6 +1,6 @@
 name := "simple-scheduler"
 
-version := "0.3"
+version := "0.1.1"
 
 scalaVersion := "2.11.12"
 
