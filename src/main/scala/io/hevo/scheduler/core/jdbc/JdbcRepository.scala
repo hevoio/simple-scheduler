@@ -27,7 +27,7 @@ abstract class JdbcRepository(dataSource: DataSource) {
     }
   }
 
-  def batchUpdate[T](sql: String, inputs: List[T], applyParameters: (T, PreparedStatement) => Unit): Unit = {
+  def batchUpdate[T](sql: String, inputs: List[T], applyParameters: (T, PreparedStatement) => Unit): Array[Int] = {
     var connection: Connection = null
     try {
       connection = this.dataSource.getConnection()

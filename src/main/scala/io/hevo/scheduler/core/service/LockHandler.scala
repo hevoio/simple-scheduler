@@ -14,7 +14,7 @@ class LockHandler(locker: Option[Lock]) {
    */
   def acquire(lockId: String, ttl: Int): Boolean = {
     var acquired: Boolean = true
-    if(locker.nonEmpty) {
+    if(locker.iterator.size > 0) {
       acquired = false
       (0 to LockHandler.attempts).iterator.takeWhile(_ => !acquired).foreach(iteration => {
         acquired = locker.get.acquire(lockId, ttl)
@@ -35,5 +35,5 @@ class LockHandler(locker: Option[Lock]) {
 
 object LockHandler {
   val attempts: Int = 3
-  val sleepOver: (Int, Int) = (10, 40)
+  val sleepOver: (Int, Int) = (10, 41)
 }

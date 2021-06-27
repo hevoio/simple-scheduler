@@ -26,7 +26,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   var tablePrefix: String = _tablePrefix
 
   def add(tasks: List[TaskDetails]): Unit = {
-    if(tasks.nonEmpty) {
+    if(tasks.iterator.size > 0) {
       val sql = ("INSERT INTO %s(type, namespace, name, handler_class, schedule_expression, parameters, status, execution_time, next_execution_time) " +
         "VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW()) " +
         "ON DUPLICATE KEY UPDATE schedule_expression = ?, parameters = ?, handler_class = ?, next_execution_time = FROM_UNIXTIME(?)").format(applicableTable(TaskRepository.tasksTable))
@@ -54,7 +54,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
 
   def get(namespace: String, keys: List[String]): Map[String, TaskDetails] = {
     var map: Map[String, TaskDetails] = Map()
-    if(keys.nonEmpty) {
+    if(keys.iterator.size > 0) {
       val sql: String = "SELECT * FROM %s WHERE namespace = ? AND name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
       val results = super.query(
         sql,
@@ -71,7 +71,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   }
 
   def delete(namespace: String, keys: List[String]):Unit = {
-    if(keys.nonEmpty) {
+    if(keys.iterator.size > 0) {
       val sql: String = "DELETE FROM %s WHERE namespace = ? AND name IN (%s)".format(applicableTable(TaskRepository.tasksTable), List.fill(keys.length)("?").mkString(","))
       super.update(
         sql,
@@ -117,7 +117,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   }
 
   def markPicked(ids: List[Long], executorId: String): Unit = {
-    if(ids.nonEmpty) {
+    if(ids.iterator.size > 0) {
       val sql: String = "UPDATE %s SET status = ?, executor_id = ?, picked_at = NOW(), executions = executions + 1 WHERE id IN (%s)"
         .format(applicableTable(TaskRepository.tasksTable), List.fill(ids.length)("?").mkString(","))
       super.update(
@@ -186,7 +186,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
   }
 
   private def updateStatus(sql: String, data: List[ExecutionResponseData]): Unit = {
-    if(data.nonEmpty) {
+    if(data.iterator.size > 0) {
       super.batchUpdate(
         sql,
         data,

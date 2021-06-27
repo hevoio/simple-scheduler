@@ -131,7 +131,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
       }
     }
     catch {
-      case e: Exception => LOG.error("Error while persisting processed task information", e)
+      case e: Throwable => LOG.error("Error while persisting processed task information", e)
     }
   }
 
@@ -141,7 +141,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     SchedulerService.UpdatesSyncedAt = new Date()
   }
   private def syncProcessedTaskUpdates(updatesTracker: mutable.Map[Long, ExecutionResponseData], updater: List[ExecutionResponseData] => Unit): Unit = {
-    if(updatesTracker.nonEmpty) {
+    if(updatesTracker.iterator.size > 0) {
       val list: List[ExecutionResponseData] = updatesTracker.values.toList
       updater(list)
       list.foreach(update => updatesTracker.remove(update.id))
@@ -223,10 +223,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
       }
       catch {
         case e: Throwable => {
-          onFailure(task)
           if (workConfig.logFailures) {
             LOG.error("Failed to process task: {}", task.id, e)
           }
+          onFailure(task)
         }
       }
       finally {

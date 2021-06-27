@@ -48,3 +48,52 @@ scheduler.stop()
 ### Configurations
 - [WorkConfig](https://github.com/hevoio/simple-scheduler/blob/master/src/main/scala/io/hevo/scheduler/config/WorkConfig.scala)
 - [SchedulerConfig](https://github.com/hevoio/simple-scheduler/blob/master/src/main/scala/io/hevo/scheduler/config/SchedulerConfig.scala)
+
+### Using in a Java project
+
+<details>
+  <summary>Maven Dependencies - Click to expand</summary>
+  
+  <code>
+  
+      <dependency>
+          <groupId>org.scala-lang</groupId>
+          <artifactId>scala-library</artifactId>
+          <version>2.11.12</version>
+      </dependency>
+      <dependency>
+          <groupId>com.cronutils</groupId>
+          <artifactId>cron-utils</artifactId>
+          <version>5.0.5</version>
+      </dependency>
+      <dependency>
+          <groupId>mysql</groupId>
+          <artifactId>mysql-connector-java</artifactId>
+          <version>8.0.23</version>
+      </dependency>
+      <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-api</artifactId>
+          <version>1.7.5</version>
+      </dependency>
+      <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+          <version>1.7.5</version>
+      </dependency>
+      <dependency>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-dbcp2</artifactId>
+          <version>2.8.0</version>
+      </dependency>
+      
+      
+      <dependency>
+          <groupId>io.hevo</groupId>
+          <artifactId>simple-scheduler</artifactId>
+          <version>0.1.2</version>
+      </dependency>
+          
+  </code>
+  
+</details>

@@ -4,9 +4,10 @@ import java.util.Date
 
 import io.hevo.scheduler.core.service.SchedulerService
 import io.hevo.scheduler.util.Util
+import org.slf4j.LoggerFactory
 
 abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression: String, _handlerClassName: String) {
-
+  private val LOG = LoggerFactory.getLogger(classOf[TaskDetails])
   var id: Long = _
   val namespace: String = _nameSpace
   val key: String = _key
