@@ -1,12 +1,12 @@
 # Simple Scheduler
 A simple to use, lightweight clustered scheduler for Java/Scala. It can be used for job processing also, but it is recommended that the operations are restricted to light-weight processing only.
 
-### Features
+#### Features
 - **Clustered**: When a Lock is used, guarantees execution by a single scheduler instance
 - **Requirements**: A single relational database table.
 - **Impact on database**: Does not require pessimistic locking. With the possibility to process updates in batches, reduces the write load on the database. The task fetches adapt to the pending work-load
 
-### Getting Started
+#### Getting Started
 
 **1.** Include the jar as a maven dependency<br/>
 **2.** Create the [database table](https://github.com/hevoio/simple-scheduler/blob/master/src/test/resources/db/001.sql).<br/>
@@ -45,11 +45,15 @@ scheduler.schedulerRegistry().register(new CronTask("Buzz_Namespace", "SR-192", 
 scheduler.stop()
 ```
 
-### Configurations
+#### Configurations
 - [WorkConfig](https://github.com/hevoio/simple-scheduler/blob/master/src/main/scala/io/hevo/scheduler/config/WorkConfig.scala)
 - [SchedulerConfig](https://github.com/hevoio/simple-scheduler/blob/master/src/main/scala/io/hevo/scheduler/config/SchedulerConfig.scala)
 
-### Using in a Java project
+#### Workflow
+
+![Workflow](https://cdn.hevodata.com/github/Simple%20Scheduler.png)
+
+#### Using in a Java project
 
 <details>
   <summary>Maven Dependencies - Click to expand</summary>
