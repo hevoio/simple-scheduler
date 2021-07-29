@@ -94,7 +94,7 @@ scheduler.stop()
       
       <dependency>
           <groupId>com.hevodata</groupId>
-          <artifactId>simple-scheduler</artifactId>
+          <artifactId>simple-scheduler_2.11</artifactId>
           <version>0.1.3</version>
       </dependency>
           
