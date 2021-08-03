@@ -8,12 +8,12 @@ import redis.clients.jedis.Jedis
  */
 class RedisBasedLock(jedisPool: JedisPool) extends Lock {
 
-  override def acquire(lockId: String, ttl: Int): Boolean = {
+  override def acquire(lockId: String, ttlSeconds: Int): Boolean = {
     var reply: String = null
     var resource: Jedis = null
     try {
       resource = this.jedisPool.getResource
-      reply = resource.set(lockId, lockId, "NX", "PX", ttl)
+      reply = resource.set(lockId, lockId, "NX", "EX", ttlSeconds)
     }
     finally {
       resource.close()
