@@ -6,14 +6,15 @@ import redis.clients.jedis.Jedis
 /**
  * A light-weight redis based implementation of the Lock trait
  */
-class RedisBasedLock(jedisPool: JedisPool) extends Lock {
+class RedisBasedLock(namespace: String = "", jedisPool: JedisPool) extends Lock {
 
   override def acquire(lockId: String, ttlSeconds: Int): Boolean = {
     var reply: String = null
     var resource: Jedis = null
     try {
       resource = this.jedisPool.getResource
-      reply = resource.set(lockId, lockId, "NX", "EX", ttlSeconds)
+      val effectiveLockId = namespace + lockId
+      reply = resource.set(effectiveLockId, effectiveLockId, "NX", "EX", ttlSeconds)
     }
     finally {
       resource.close()
@@ -25,7 +26,8 @@ class RedisBasedLock(jedisPool: JedisPool) extends Lock {
     var resource: Jedis = null
     try {
       resource = this.jedisPool.getResource
-      resource.del(lockId)
+      val effectiveLockId = namespace + lockId
+      resource.del(effectiveLockId)
     }
     finally {
       resource.close()

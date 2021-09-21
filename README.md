@@ -25,7 +25,7 @@ JobResolverFactory jobResolverFactory = new ConstructionBasedFactory();
 **5.** (Not required in a single instance mode) Create a Lock or use the default Redis based Lock
 
 ```
-Lock lock = new RedisBasedLock(JedisPool jedisPool)
+Lock lock = new RedisBasedLock(String namespace, JedisPool jedisPool)
 ```
 
 **6.** Create the Scheduler instance and start it
@@ -95,7 +95,7 @@ scheduler.stop()
       <dependency>
           <groupId>com.hevodata</groupId>
           <artifactId>simple-scheduler_2.11</artifactId>
-          <version>0.1.4</version>
+          <version>0.1.5</version>
       </dependency>
           
   </code>

@@ -11,6 +11,6 @@ public class RedisLockProvider {
         poolConfig.setMaxIdle(25);
         poolConfig.setMaxWaitMillis(10_000);
 
-        return new RedisBasedLock(new JedisPool(poolConfig, redisHost, port));
+        return new RedisBasedLock("app1", new JedisPool(poolConfig, redisHost, port));
     }
 }
