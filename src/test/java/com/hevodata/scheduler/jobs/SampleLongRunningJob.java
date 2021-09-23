@@ -24,4 +24,9 @@ public class SampleLongRunningJob implements Job {
         }
         return ExecutionStatus.SUCCEEDED();
     }
+
+    @Override
+    public long maxRunTime() {
+        return 100 * 60;
+    }
 }

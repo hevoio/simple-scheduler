@@ -6,6 +6,7 @@ import java.util.{Date, Optional}
 
 import com.hevodata.scheduler.{ExecutionStatus, Job, Scheduler, SchedulerStatus}
 import com.hevodata.scheduler.config.WorkConfig
+import com.hevodata.scheduler.core.Constants
 import com.hevodata.scheduler.core.jdbc.TaskRepository
 import com.hevodata.scheduler.core.model.{TaskDetails, TaskStatus}
 import com.hevodata.scheduler.dto.{ExecutionContext, ExecutionResponseData}
@@ -165,14 +166,38 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
 
   /**
    * In some cases, the tasks may stay in the PICKED state in case of an app crash or otherwise.
-   * This operation move such tasks to EXPIRED state. Make sure that the cleanupFrequency is larger than the maximum time for which any job can legitimately run
+   * This operation move such tasks to EXPIRED state.
+   * The cleanup window is defined per job type (and can be extended. default = 45 minutes)
    * Note that if a lock is used, the lock is not released for the entire duration so that other instances of the Scheduler also don't attempt the cleanups
    */
   def attemptCleanup(): Unit = {
     if(Util.nowWithDelta(-workConfig.cleanupFrequency).after(SchedulerService.CleanupAttemptedAt)) {
       try {
         if(lockHandler.acquire(SchedulerService.GlobalCleanupLockId, workConfig.cleanupFrequency)) {
-          taskRepository.markExpired(TaskStatus.PICKED, workConfig.cleanupFrequency)
+
+          val bufferTime: Int = workConfig.cleanupFrequency * 2
+          // This should be an ideally a small list
+          val tasks: List[TaskDetails] = taskRepository.fetchPicked(bufferTime)
+
+          val ids: List[Long] = tasks.filter(task => {
+            val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
+            var expiryTime: Long = Constants.MaxRunTime
+            if(optionalJobHandler.isPresent) {
+              expiryTime = optionalJobHandler.get().maxRunTime()
+            }
+            null != task.pickedTime && Util.nowWithDelta(-expiryTime).after(task.pickedTime)
+          }).map(task => task.id):List[Long]
+
+          if(ids.iterator.size > 0) {
+            LOG.error("Trying to mark the following Task Ids as expired: {}", ids)
+            // This is a necessary step but could leak threads if the scheduler threads are actually blocked. So the timeouts should typically be large and attention should be given to the error log
+            taskRepository.markExpired(ids, bufferTime)
+          }
+        }
+      }
+      catch {
+        case e: Throwable => {
+          LOG.error("Failed to mark tasks as Expired during Cleanup", e)
         }
       }
       finally {
