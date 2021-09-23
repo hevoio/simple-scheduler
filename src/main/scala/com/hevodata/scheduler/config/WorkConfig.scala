@@ -32,7 +32,7 @@ class WorkConfig(_appId: String) {
   /**
    * Attempt cleanup of "stuck" objects proactively at this frequency (in seconds)
    */
-  var cleanupFrequency: Int = 45 * 60
+  var cleanupFrequency: Int = 5 * 60
 
   var logFailures: Boolean = true
 
@@ -43,6 +43,11 @@ class WorkConfig(_appId: String) {
    * If true, the next execution is in reference to the current execution completion instant
    */
   var nextRelativeToNow: Boolean = false
+
+  def cleanupFrequency(cleanupFrequency: Int): WorkConfig = {
+    this.cleanupFrequency = cleanupFrequency
+    this
+  }
 
   def workers(workers: Int): WorkConfig = {
     this.workers = workers

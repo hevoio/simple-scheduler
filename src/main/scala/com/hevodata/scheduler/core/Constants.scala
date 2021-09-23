@@ -17,6 +17,7 @@ object Constants {
   val fieldScheduleExpression: String = "schedule_expression"
   val fieldExecutorId: String = "executor_id"
 
+  val fieldPickedTime: String = "picked_at"
   val fieldExecutionTime: String = "execution_time"
   val fieldNextExecutionTime: String = "next_execution_time"
 
@@ -28,5 +29,7 @@ object Constants {
 
   val DefaultNamespace = "DEFAULT"
 
+  // In seconds
   val InitialDelay: Long = 5
+  val MaxRunTime: Long = 45 * 60
 }

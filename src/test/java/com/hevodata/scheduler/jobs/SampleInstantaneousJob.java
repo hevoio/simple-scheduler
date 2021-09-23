@@ -12,4 +12,9 @@ public class SampleInstantaneousJob implements Job {
 
         return ExecutionStatus.FAILED();
     }
+
+    @Override
+    public long maxRunTime() {
+        return 60;
+    }
 }

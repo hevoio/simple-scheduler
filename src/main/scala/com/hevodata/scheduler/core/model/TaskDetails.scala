@@ -13,6 +13,7 @@ abstract class TaskDetails(_nameSpace: String, _key: String, _scheduleExpression
   val key: String = _key
   val scheduleExpression: String = _scheduleExpression
 
+  var pickedTime: Date = _
   var executionTime: Date = _
   var nextExecutionTime: Date = new Date
 

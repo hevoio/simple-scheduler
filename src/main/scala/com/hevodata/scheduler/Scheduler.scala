@@ -20,7 +20,7 @@ class Scheduler private {
   private var config: SchedulerConfig = _
   private var monitor: ScheduledExecutorService = _
 
-  private var schedulerService: SchedulerService = _
+  var schedulerService: SchedulerService = _
   var schedulerRegistry: SchedulerRegistry = _
 
   def this(config: SchedulerConfig, jobHandlerFactory: JobHandlerFactory = new ConstructionBasedFactory) {

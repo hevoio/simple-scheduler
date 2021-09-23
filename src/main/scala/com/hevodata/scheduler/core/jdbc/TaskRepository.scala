@@ -116,6 +116,19 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
     )
   }
 
+  def fetchPicked(pickedSince: Int): List[TaskDetails] = {
+    val sql: String = "SELECT * FROM %s WHERE status = ? AND picked_at < DATE_ADD(NOW(), INTERVAL -? SECOND)".format(applicableTable(TaskRepository.tasksTable))
+    super.query(
+      sql,
+      statement => {
+        val counter: AtomicInteger = new AtomicInteger()
+        statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
+        statement.setInt(counter.incrementAndGet(), pickedSince)
+      },
+      resultSet => TaskMapper.toTaskDetails(resultSet)
+    )
+  }
+
   def markPicked(ids: List[Long], executorId: String): Unit = {
     if(ids.iterator.size > 0) {
       val sql: String = "UPDATE %s SET status = ?, executor_id = ?, picked_at = NOW(), executions = executions + 1 WHERE id IN (%s)"
@@ -160,16 +173,17 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
     )
   }
 
-  def markExpired(fromStatus: Status, pickedSince: Int): Unit = {
+  def markExpired(ids: List[Long], bufferSeconds: Int): Unit = {
     val sql: String = ("UPDATE %s set status = ?, last_failed_at = NOW(), failure_count = failure_count + 1 " +
-      "WHERE status = ? AND picked_at < DATE_ADD(NOW(), INTERVAL -? SECOND)").format(applicableTable(TaskRepository.tasksTable))
+      "WHERE status = ? AND picked_at < DATE_ADD(NOW(), INTERVAL -? SECOND) AND id IN (%s)").format(applicableTable(TaskRepository.tasksTable), List.fill(ids.length)("?").mkString(","))
     super.update(
       sql,
       statement => {
         val counter: AtomicInteger = new AtomicInteger()
         statement.setString(counter.incrementAndGet(), TaskStatus.EXPIRED.toString)
-        statement.setString(counter.incrementAndGet(), fromStatus.toString)
-        statement.setInt(counter.incrementAndGet(), pickedSince)
+        statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
+        statement.setInt(counter.incrementAndGet(), bufferSeconds)
+        ids.foreach(id => statement.setLong(counter.incrementAndGet(), id))
       }
     )
   }
@@ -225,6 +239,7 @@ object TaskMapper {
     task.id = resultSet.getLong(Constants.fieldId)
     task.parameters = resultSet.getString(Constants.fieldParameters)
     task.status = TaskStatus.withName(resultSet.getString(Constants.fieldStatus))
+    task.pickedTime = resultSet.getTimestamp(Constants.fieldPickedTime)
     task.nextExecutionTime = resultSet.getTimestamp(Constants.fieldNextExecutionTime)
     task.executionTime = resultSet.getTimestamp(Constants.fieldExecutionTime)
 
