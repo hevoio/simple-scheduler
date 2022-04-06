@@ -51,7 +51,7 @@ scheduler.stop()
 
 #### Workflow
 
-![Workflow](https://cdn.hevodata.com/github/Simple%20Scheduler.png)
+![Workflow](https://cdn.hevodata.com/github/simple-scheduler-v2.png)
 
 #### Using in a Java project
 
