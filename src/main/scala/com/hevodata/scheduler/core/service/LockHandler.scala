@@ -1,6 +1,7 @@
 package com.hevodata.scheduler.core.service
 
 import com.hevodata.scheduler.lock.Lock
+import com.hevodata.scheduler.statsd.InfraStatsD
 import com.hevodata.scheduler.util.Util
 import org.slf4j.LoggerFactory
 
@@ -17,6 +18,7 @@ class LockHandler(locker: Option[Lock]) {
       (0 to LockHandler.attempts).iterator.takeWhile(_ => !acquired).foreach(iteration => {
         acquired = locker.get.acquire(lockId, ttlSeconds)
         if(!acquired) {
+          InfraStatsD.incr(InfraStatsD.Aspect.TASKS_GLOBAL_LOCK_RETRIES, java.util.Arrays.asList())
           Thread.sleep(Util.getRandom(LockHandler.sleepOver))
         }
       })
