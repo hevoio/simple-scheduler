@@ -5,6 +5,10 @@ import com.timgroup.statsd.StatsDClient;
 
 import java.util.List;
 
+/**
+ * Infra client for statsD.
+ * It talks to statsD client on port 8126, similar to services port.
+ */
 public class InfraStatsD extends StatsD {
 
     public static class Aspect {

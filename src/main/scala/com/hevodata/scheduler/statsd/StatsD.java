@@ -4,6 +4,9 @@ import com.timgroup.statsd.StatsDClient;
 
 import java.util.List;
 
+/**
+ StatsD interface
+ */
 abstract class StatsD {
 
     static void incr(StatsDClient statsDClient, String aspect, List<String> tags) {
@@ -24,14 +27,5 @@ abstract class StatsD {
 
     private static String[] getDataDogTags(List<String> tags) {
         return tags.toArray(new String[tags.size()]);
-    }
-
-    public static String toStatsDCompatibleValue(String str) {
-        return str.replaceAll("[\\|]", "_");
-    }
-
-    static String toStatsDCompatibleKey(String key) {
-        // replace "-" and " " with "_"
-        return key.toLowerCase().replaceAll("[- ]", "_");
     }
 }
