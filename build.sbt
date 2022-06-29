@@ -3,23 +3,35 @@ name := "simple-scheduler"
 scalaVersion := "2.11.12"
 
 organization := "com.hevodata"
+organizationName := "Hevo Data Inc"
+organizationHomepage := Some(url("https://hevodata.com/"))
+
 homepage := Some(url("https://github.com/hevoio/simple-scheduler"))
-scmInfo := Some(ScmInfo(url("https://github.com/dataoperandz/cassper"), "git@github.com:hevoio/simple-scheduler.git"))
-developers := List(Developer("tj---", "Trilok Jain", "trilok@hevodata.com", url("https://github.com/tj---")),Developer("sar009", "Sarad Mohanan", "sarad@hevodata.com", url("https://github.com/tj---")))
+description := "A simple to use, lightweight clustered scheduler for Java/Scala. It can be used for job processing also, but it is recommended that the operations are restricted to light-weight processing only."
+scmInfo := Some(ScmInfo(url("https://github.com/hevoio/simple-scheduler"), "git@github.com:hevoio/simple-scheduler.git"))
+developers := List(Developer("tj---", "Trilok Jain", "trilok@hevodata.com", url("https://github.com/tj---")),Developer("sar009", "Sarad Mohanan", "sarad@hevodata.com", url("https://github.com/sar009")))
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 publishMavenStyle := true
 
 crossPaths := false
 
-publishTo := Some(
-  if (isSnapshot.value)
-    Opts.resolver.sonatypeSnapshots
-  else
-    Opts.resolver.sonatypeStaging
-)
+//publishTo := Some(
+//  if (isSnapshot.value)
+//    Opts.resolver.sonatypeSnapshots
+//  else
+//    Opts.resolver.sonatypeStaging
+//)
+
+publishTo := {
+  val nexus = "https://s01.oss.sonatype.org/"
+  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots/")
+  else Some("releases" at nexus + "service/local/staging/deploy/maven2/")
+}
+
 
 publishConfiguration := publishConfiguration.value.withOverwrite(true)
 publishLocalConfiguration := publishLocalConfiguration.value.withOverwrite(true)
+pomIncludeRepository := { _ => false }
 
 isSnapshot := true
 
