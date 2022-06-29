@@ -9,7 +9,7 @@ organizationHomepage := Some(url("https://hevodata.com/"))
 homepage := Some(url("https://github.com/hevoio/simple-scheduler"))
 description := "A simple to use, lightweight clustered scheduler for Java/Scala. It can be used for job processing also, but it is recommended that the operations are restricted to light-weight processing only."
 scmInfo := Some(ScmInfo(url("https://github.com/hevoio/simple-scheduler"), "git@github.com:hevoio/simple-scheduler.git"))
-developers := List(Developer("tj---", "Trilok Jain", "trilok@hevodata.com", url("https://github.com/tj---")),Developer("sar009", "Sarad Mohanan", "sarad@hevodata.com", url("https://github.com/sar009")))
+developers := List(Developer("tj---", "Trilok Jain", "trilok@hevodata.com", url("https://github.com/tj---")),Developer("sar009", "Sarad Mohanan", "sarad@hevodata.com", url("https://sarad.in")))
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 publishMavenStyle := true
 
