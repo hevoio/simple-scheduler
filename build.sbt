@@ -48,8 +48,8 @@ releaseProcess := Seq[ReleaseStep](
   releaseStepCommandAndRemaining("+publishSigned"),
   setNextVersion,
   commitNextVersion,
-  releaseStepCommand("sonatypeRelease"),
-  pushChanges
+//  releaseStepCommand("sonatypeRelease"),
+//  pushChanges
 )
 
 libraryDependencies ++= Seq(
