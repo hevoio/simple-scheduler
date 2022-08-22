@@ -246,10 +246,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     val tags: java.util.List[String] =
       java.util.Arrays.asList(
         String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
-    InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, java.util.Arrays.asList())
+    InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, tags)
     override def run(): Unit = {
       try {
-        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, java.util.Arrays.asList())
+        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, tags)
         val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
         if(optionalJobHandler.isPresent) {
           val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters))
