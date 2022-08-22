@@ -243,6 +243,9 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     val delayInMillis = Util.millisToSeconds(System.currentTimeMillis() - task.nextExecutionTime.getTime)
     LOG.debug("Metrics. Task: %s-%s Delay (in seconds): %d".format(task.namespace, task.key,  delayInMillis));
 
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
     InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, java.util.Arrays.asList())
     override def run(): Unit = {
       try {

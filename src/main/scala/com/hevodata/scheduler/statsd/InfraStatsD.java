@@ -16,17 +16,18 @@ public class InfraStatsD extends StatsD {
         private Aspect() {}
 
         public static final String TASKS_ADDED = "greenseer_add_tasks";
-        public static final String TRIGGER_RUN = "greenseer_trigger_run";
         public static final String TASKS_DELETED = "greenseer_delete_tasks";
-        public static final String TASKS_DELAY = "greenseer_task_delay";
+        public static final String TASKS_FAILED = "greenseer_tasks_failed";
         public static final String TASKS_RUNNING = "greenseer_task_running";
+        public static final String TASKS_DELAY = "greenseer_task_delay";
+        public static final String TASKS_CLEANED = "greenseer_tasks_cleaned";
+        public static final String TASKS_FETCHED = "greenseer_tasks_fetched";
         public static final String TASKS_GLOBAL_LOCK_ACQUIRE = "greenseer_global_lock_acquire";
         public static final String TASKS_GLOBAL_LOCK_ACQUIRE_FAILED = "greenseer_global_lock_acquire_failed";
         public static final String TASKS_GLOBAL_LOCK_RETRIES = "greenseer_global_lock_retries";
-        public static final String TASKS_FETCHED = "greenseer_tasks_fetched";
-        public static final String TASKS_FAILED = "greenseer_tasks_failed";
+        public static final String TRIGGER_RUN = "greenseer_trigger_run";
         public static final String TASKS_MISSING = "greenseer_tasks_missing_handler";
-        public static final String TASKS_CLEANED = "greenseer_tasks_cleaned";
+
     }
 
     private static final String METRICS_PREFIX = "";
