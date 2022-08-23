@@ -62,7 +62,9 @@ libraryDependencies ++= Seq(
   "junit" % "junit" % "4.13.2" % Test,
   "com.wix" % "wix-embedded-mysql" % "4.6.1" % Test,
   "org.apache.commons" % "commons-dbcp2" % "2.8.0" % Test,
-  "mysql" % "mysql-connector-java" % "8.0.16" % Test
+  "mysql" % "mysql-connector-java" % "8.0.16" % Test,
+  "com.novocode" % "junit-interface" % "0.11" % "test->default"
 )
 
 scalacOptions += "-target:jvm-1.8"
+Test / testOptions := Seq(Tests.Argument(TestFrameworks.JUnit, "-v", "-a"))
