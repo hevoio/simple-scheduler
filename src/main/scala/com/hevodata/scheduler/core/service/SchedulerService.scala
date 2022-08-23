@@ -243,10 +243,13 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     val delayInMillis = Util.millisToSeconds(System.currentTimeMillis() - task.nextExecutionTime.getTime)
     LOG.debug("Metrics. Task: %s-%s Delay (in seconds): %d".format(task.namespace, task.key,  delayInMillis));
 
-    InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, java.util.Arrays.asList())
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, tags)
     override def run(): Unit = {
       try {
-        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, java.util.Arrays.asList())
+        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, tags)
         val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
         if(optionalJobHandler.isPresent) {
           val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters))

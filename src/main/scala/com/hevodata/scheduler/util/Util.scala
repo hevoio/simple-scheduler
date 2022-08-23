@@ -23,4 +23,8 @@ object Util {
   def nowWithDelta(seconds: Long): Date = {
     new Date(System.currentTimeMillis() + secondsToMillis(seconds))
   }
+
+  def getJobName(jobName: String): String = {
+    jobName.split("\\.").last;
+  }
 }
