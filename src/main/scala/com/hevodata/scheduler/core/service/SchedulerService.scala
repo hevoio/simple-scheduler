@@ -252,7 +252,7 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
         InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, tags)
         val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
         if(optionalJobHandler.isPresent) {
-          val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters))
+          val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters, task.nextExecutionTime))
           onSuccess(task, executionStatus)
         }
         else {
