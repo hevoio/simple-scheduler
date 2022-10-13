@@ -105,6 +105,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
     else {
       SchedulerService.SuccessTracker.put(task.id, successData(task))
+      val tags: java.util.List[String] =
+        java.util.Arrays.asList(
+          String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+      InfraStatsD.incr(InfraStatsD.Aspect.TASKS_SUCCESS, tags)
       if (!workConfig.batchUpdates) {
         this.syncProcessedTaskInformationNow()
       }
@@ -112,7 +116,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onFailure(task: TaskDetails): Unit = {
-    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_FAILED, java.util.Arrays.asList())
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_FAILED, tags)
     removeUnfinishedTaskEntry(task)
     SchedulerService.FailureTracker.put(task.id, failureData(task))
     if(!workConfig.batchUpdates) {
@@ -121,7 +128,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onMissingHandler(task: TaskDetails): Unit = {
-    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_MISSING, java.util.Arrays.asList())
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_MISSING, tags)
     removeUnfinishedTaskEntry(task)
     this.schedulerRegistry.deRegister(task.namespace, task.key)
   }
