@@ -22,6 +22,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -66,7 +67,7 @@ public class TestScheduler {
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "FAIL_IMMEDIATELY", Duration.apply(7, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN).withParameters("FAIL_IMMEDIATELY"));
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Key-1", Duration.apply(11, TimeUnit.SECONDS), JOB_LONG_RUNNING_FQCN));
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Key-2", Duration.apply(7, TimeUnit.SECONDS), JOB_INSTANTANEOUS_FQCN));
-        scheduler.schedulerRegistry().register(new CronTask(NS, "Cron-1", "0/6 * * * * ?", JOB_INSTANTANEOUS_FQCN));
+        scheduler.schedulerRegistry().register(new CronTask(NS, "Cron-1", "0/6 * * * * ?", ZoneId.of("UTC"), JOB_INSTANTANEOUS_FQCN));
         scheduler.start();
         Thread.sleep(SLEEP_DURATION);
         Assert.assertEquals(7, scheduler.jobKeys(NS).size());
@@ -97,10 +98,10 @@ public class TestScheduler {
         SchedulerConfig schedulerConfig = new SchedulerConfig(dataSource, workConfig).withTablePrefix(TABLE_PREFIX).withPollFrequency(2);
         Scheduler scheduler = new Scheduler(schedulerConfig, jobResolver);
         scheduler.schedulerRegistry().register(new RepeatableTask(NS, "Short-1", Duration.apply(300, TimeUnit.SECONDS), JOB_INSTANTANEOUS_FQCN));
-        scheduler.schedulerRegistry().register(new CronTask(NS, "Short-2", "0/6 * * * * ?", JOB_INSTANTANEOUS_FQCN));
-        scheduler.schedulerRegistry().register(new CronTask(NS, "Short-3", "0/3 * * * * ?", JOB_INSTANTANEOUS_FQCN));
-        scheduler.schedulerRegistry().register(new CronTask(NS, "Long-Running-2", "0/6 * * * * ?", JOB_LONG_RUNNING_FQCN));
-        scheduler.schedulerRegistry().register(new CronTask(NS, "Long-Running-3", "0/6 * * * * ?", JOB_LONG_RUNNING_FQCN));
+        scheduler.schedulerRegistry().register(new CronTask(NS, "Short-2", "0/6 * * * * ?", ZoneId.of("UTC"), JOB_INSTANTANEOUS_FQCN));
+        scheduler.schedulerRegistry().register(new CronTask(NS, "Short-3", "0/3 * * * * ?", ZoneId.of("UTC"), JOB_INSTANTANEOUS_FQCN));
+        scheduler.schedulerRegistry().register(new CronTask(NS, "Long-Running-2", "0/6 * * * * ?", ZoneId.of("UTC"), JOB_LONG_RUNNING_FQCN));
+        scheduler.schedulerRegistry().register(new CronTask(NS, "Long-Running-3", "0/6 * * * * ?", ZoneId.of("UTC"), JOB_LONG_RUNNING_FQCN));
 
         scala.collection.Map<String, TaskDetails> map = taskRepository.get(NS,
             JavaConversions.asScalaBuffer(Arrays.asList("Short-1", "Short-2", "Short-3", "Long-Running-2", "Long-Running-3")

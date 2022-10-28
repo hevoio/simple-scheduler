@@ -15,6 +15,7 @@ object Constants {
   val fieldType: String = "type"
   val fieldHandlerClass: String = "handler_class"
   val fieldScheduleExpression: String = "schedule_expression"
+  val fieldTimeZone: String = "timezone"
   val fieldExecutorId: String = "executor_id"
 
   val fieldPickedTime: String = "picked_at"

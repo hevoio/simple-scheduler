@@ -8,12 +8,14 @@ import com.hevodata.scheduler.core.model.{CronTaskDetails, RepeatableTaskDetails
 import com.hevodata.scheduler.core.model.TaskStatus.Status
 import com.hevodata.scheduler.core.model.TaskType.TaskType
 import com.hevodata.scheduler.dto.ExecutionResponseData
-import com.hevodata.scheduler.dto.task.{CronTask, Task}
+import com.hevodata.scheduler.dto.task.{CronTask, RepeatableTask, Task}
 import com.hevodata.scheduler.statsd.InfraStatsD
 import com.hevodata.scheduler.util.Util
 
 import javax.sql.DataSource
 import org.slf4j.LoggerFactory
+
+import java.time.ZoneId
 
 /**
  *
@@ -239,7 +241,8 @@ object TaskMapper {
     val key: String = resultSet.getString(Constants.fieldName)
     val scheduleExpression: String = resultSet.getString(Constants.fieldScheduleExpression)
     val handlerClassName: String = resultSet.getString(Constants.fieldHandlerClass)
-    val task: TaskDetails = if(TaskType.CRON == taskType) CronTaskDetails(namespace, key, scheduleExpression, handlerClassName) else RepeatableTaskDetails(namespace, key, scheduleExpression, handlerClassName)
+    val timezone: ZoneId = ZoneId.of(resultSet.getString(Constants.fieldTimeZone))
+    val task: TaskDetails = if(TaskType.CRON == taskType) CronTaskDetails(namespace, key, scheduleExpression, timezone, handlerClassName) else RepeatableTaskDetails(namespace, key, scheduleExpression, handlerClassName)
 
     task.id = resultSet.getLong(Constants.fieldId)
     task.parameters = resultSet.getString(Constants.fieldParameters)
@@ -255,9 +258,13 @@ object TaskMapper {
   }
 
   def toTaskDetails(task: Task): TaskDetails = {
-    val taskDetails: TaskDetails = (if(task.isInstanceOf[CronTask]) classOf[CronTaskDetails] else classOf[RepeatableTaskDetails])
-      .getDeclaredConstructor(classOf[String], classOf[String], classOf[String], classOf[String])
-      .newInstance(task.namespace, task.key, task.scheduleExpression(), task.handlerClassName)
+    val taskDetails: TaskDetails =
+      task match {
+      case cronTask: CronTask =>
+        CronTaskDetails(cronTask.namespace, cronTask.key, cronTask.scheduleExpression(), cronTask.timezone, cronTask.handlerClassName)
+      case repeatableTask: RepeatableTask =>
+        RepeatableTaskDetails(repeatableTask.namespace, repeatableTask.key, repeatableTask.scheduleExpression(), repeatableTask.handlerClassName)
+    }
     taskDetails.parameters = task.parameters
     taskDetails
   }
