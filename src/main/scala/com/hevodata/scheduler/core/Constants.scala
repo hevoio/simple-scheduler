@@ -33,4 +33,6 @@ object Constants {
   // In seconds
   val InitialDelay: Long = 5
   val MaxRunTime: Long = 45 * 60
+
+  val tagNameTaskType = "task_type"
 }

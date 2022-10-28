@@ -9,6 +9,7 @@ import com.hevodata.scheduler.core.model.TaskStatus.Status
 import com.hevodata.scheduler.core.model.TaskType.TaskType
 import com.hevodata.scheduler.dto.ExecutionResponseData
 import com.hevodata.scheduler.dto.task.{CronTask, RepeatableTask, Task}
+import com.hevodata.scheduler.statsd.InfraStatsD
 import com.hevodata.scheduler.util.Util
 
 import javax.sql.DataSource
@@ -51,6 +52,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
           statement.setLong(counter.incrementAndGet(), Util.millisToSeconds(task.nextExecutionTime.getTime))
         }
       )
+      InfraStatsD.count(InfraStatsD.Aspect.TASKS_ADDED, tasks.iterator.size, java.util.Arrays.asList())
     }
   }
 
@@ -83,6 +85,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
           keys.foreach(key => statement.setString(counter.incrementAndGet(), key))
         }
       )
+      InfraStatsD.count(InfraStatsD.Aspect.TASKS_DELETED, keys.iterator.size, java.util.Arrays.asList())
     }
   }
 
@@ -173,6 +176,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
         statement.setString(counter.incrementAndGet(), TaskStatus.PICKED.toString)
       }
     )
+    InfraStatsD.incr(InfraStatsD.Aspect.TRIGGER_RUN, java.util.Arrays.asList())
   }
 
   def markExpired(ids: List[Long], bufferSeconds: Int): Unit = {
@@ -188,6 +192,7 @@ class TaskRepository(_dataSource: DataSource, _tablePrefix: String) extends Jdbc
         ids.foreach(id => statement.setLong(counter.incrementAndGet(), id))
       }
     )
+    InfraStatsD.count(InfraStatsD.Aspect.TASKS_CLEANED, ids.iterator.size, java.util.Arrays.asList())
   }
 
   def markFailed(data: List[ExecutionResponseData]): Unit = {

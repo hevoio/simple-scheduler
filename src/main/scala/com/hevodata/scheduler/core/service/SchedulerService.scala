@@ -3,7 +3,6 @@ package com.hevodata.scheduler.core.service
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ExecutorService, Executors, ThreadFactory, TimeUnit}
 import java.util.{Date, Optional}
-
 import com.hevodata.scheduler.{ExecutionStatus, Job, Scheduler, SchedulerStatus}
 import com.hevodata.scheduler.config.WorkConfig
 import com.hevodata.scheduler.core.Constants
@@ -11,6 +10,7 @@ import com.hevodata.scheduler.core.jdbc.TaskRepository
 import com.hevodata.scheduler.core.model.{TaskDetails, TaskStatus}
 import com.hevodata.scheduler.dto.{ExecutionContext, ExecutionResponseData}
 import com.hevodata.scheduler.handler.JobHandlerFactory
+import com.hevodata.scheduler.statsd.InfraStatsD
 import com.hevodata.scheduler.util.Util
 import org.slf4j.LoggerFactory
 
@@ -61,9 +61,11 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   def doWork(): Boolean = {
     var lockAcquired: Boolean = false
     try {
+      InfraStatsD.incr(InfraStatsD.Aspect.TASKS_GLOBAL_LOCK_ACQUIRE, java.util.Arrays.asList())
       lockAcquired = lockHandler.acquire(SchedulerService.GlobalWorkLockId, SchedulerService.LockLife)
       if(lockAcquired) {
         val requestSize: Int = workConfig.tasksToRequest(SchedulerService.UnfinishedTasks.iterator.size)
+        InfraStatsD.count(InfraStatsD.Aspect.TASKS_FETCHED, requestSize, java.util.Arrays.asList())
         LOG.debug("Attempting to request: {} tasks. Unfinished tasks: {}", requestSize, SchedulerService.UnfinishedTasks.toString)
         if(requestSize > 0) {
           val tasks: List[TaskDetails] = taskRepository.fetch(TaskStatus.EXECUTABLE_STATUSES, requestSize, workConfig.maxLookAheadTime)
@@ -76,6 +78,8 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
             this.workerPool.submit(new Handler(task))
           })
         }
+      } else {
+        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_GLOBAL_LOCK_ACQUIRE_FAILED, java.util.Arrays.asList())
       }
     }
     catch {
@@ -101,6 +105,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
     }
     else {
       SchedulerService.SuccessTracker.put(task.id, successData(task))
+      val tags: java.util.List[String] =
+        java.util.Arrays.asList(
+          String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+      InfraStatsD.incr(InfraStatsD.Aspect.TASKS_SUCCESS, tags)
       if (!workConfig.batchUpdates) {
         this.syncProcessedTaskInformationNow()
       }
@@ -108,6 +116,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onFailure(task: TaskDetails): Unit = {
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_FAILED, tags)
     removeUnfinishedTaskEntry(task)
     SchedulerService.FailureTracker.put(task.id, failureData(task))
     if(!workConfig.batchUpdates) {
@@ -116,6 +128,10 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   def onMissingHandler(task: TaskDetails): Unit = {
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.incr(InfraStatsD.Aspect.TASKS_MISSING, tags)
     removeUnfinishedTaskEntry(task)
     this.schedulerRegistry.deRegister(task.namespace, task.key)
   }
@@ -234,12 +250,19 @@ class SchedulerService private(jobHandlerFactory: JobHandlerFactory, taskReposit
   }
 
   class Handler(task: TaskDetails) extends Runnable {
-    LOG.debug("Metrics. Task: %s-%s Delay (in seconds): %d".format(task.namespace, task.key,  Util.millisToSeconds(System.currentTimeMillis() - task.nextExecutionTime.getTime)))
+    val delayInMillis = Util.millisToSeconds(System.currentTimeMillis() - task.nextExecutionTime.getTime)
+    LOG.debug("Metrics. Task: %s-%s Delay (in seconds): %d".format(task.namespace, task.key,  delayInMillis));
+
+    val tags: java.util.List[String] =
+      java.util.Arrays.asList(
+        String.format("%s:%s", Constants.tagNameTaskType, Util.getJobName(task.handlerClassName)));
+    InfraStatsD.time(InfraStatsD.Aspect.TASKS_DELAY, delayInMillis, tags)
     override def run(): Unit = {
       try {
+        InfraStatsD.incr(InfraStatsD.Aspect.TASKS_RUNNING, tags)
         val optionalJobHandler: Optional[Job] = jobHandlerFactory.resolve(task.handlerClassName)
         if(optionalJobHandler.isPresent) {
-          val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters))
+          val executionStatus: ExecutionStatus.Status = optionalJobHandler.get().execute(ExecutionContext(task.parameters, task.nextExecutionTime))
           onSuccess(task, executionStatus)
         }
         else {
