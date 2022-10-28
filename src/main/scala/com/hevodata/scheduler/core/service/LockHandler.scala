@@ -10,7 +10,7 @@ class LockHandler(locker: Option[Lock]) {
    * It makes LockHandler.attempts number of attempts to acquire the lock in random gaps of LockHandler.sleepOver ms each
    * @return true if there is no Lock to be acquired or the lock acquisition was successful
    */
-  def acquire(lockId: String, ttlSeconds: Int): Boolean = {
+  def acquire(lockId: String, ttlSeconds: Int): Boolean = `{
     var acquired: Boolean = true
     if(locker.iterator.size > 0) {
       acquired = false
