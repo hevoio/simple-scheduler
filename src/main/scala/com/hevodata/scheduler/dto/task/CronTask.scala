@@ -15,11 +15,7 @@ import java.time.ZoneId
  */
 case class CronTask(_nameSpace: String = Constants.DefaultNamespace, _key: String, _cronExpression: String, _timezone: ZoneId, _handlerFqcn: String) extends Task(_nameSpace, _key, _handlerFqcn) {
   val cronExpression: String = _cronExpression
-  val timezone: ZoneId = _timezone
-
-  def this(_nameSpace: String = Constants.DefaultNamespace, _key: String, _cronExpression: String, _handlerFqcn: String) {
-    this(_nameSpace, _key, _cronExpression, ZoneId.of("UTC"), _handlerFqcn)
-  }
+  val timezone: ZoneId = ZoneId.of("UTC")
 
   def scheduleExpression(): String = {
     _cronExpression

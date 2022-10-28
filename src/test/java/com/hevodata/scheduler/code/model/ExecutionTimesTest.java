@@ -11,6 +11,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import scala.concurrent.duration.Duration;
 
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
@@ -32,7 +33,8 @@ public class ExecutionTimesTest {
 
     @Test
     public void testCron() {
-        CronTask cronTask = new CronTask("NS-1", "Key-1", "0/30 * * * * ?", SampleInstantaneousJob.class.getCanonicalName());
+        // todo : Add test cases for DLS
+        CronTask cronTask = new CronTask("NS-1", "Key-1", "0/30 * * * * ?", ZoneId.of("UTC"), SampleInstantaneousJob.class.getCanonicalName());
         CronTaskDetails cronTaskDetails = (CronTaskDetails) TaskMapper.toTaskDetails(cronTask);
         // The first execution is immediate (now)
         assertInRange(cronTaskDetails.nextExecutionTime(), -2, 2);
@@ -44,7 +46,7 @@ public class ExecutionTimesTest {
         assertInRange(cronTaskDetails.calculateNextExecutionTime(referenceDate), 3, 7);
 
         // Once every 8 hours
-        cronTask = new CronTask("NS-1", "Key-1", "0 0 0/8 1/1 * ? *", SampleInstantaneousJob.class.getCanonicalName());
+        cronTask = new CronTask("NS-1", "Key-1", "0 0 0/8 1/1 * ? *", ZoneId.of("UTC"), SampleInstantaneousJob.class.getCanonicalName());
         cronTaskDetails = (CronTaskDetails) TaskMapper.toTaskDetails(cronTask);
         Date nextExecutionTime = cronTaskDetails.calculateNextExecutionTime(new Date());
         long diff = Util.millisToSeconds(cronTaskDetails.calculateNextExecutionTime(nextExecutionTime).getTime() - nextExecutionTime.getTime());

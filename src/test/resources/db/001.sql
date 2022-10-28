@@ -16,6 +16,7 @@
   `executor_id` varchar(48) NULL,
   `created_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `timezone` varchar(10) NOT NULL DEFAULT 'UTC',
   PRIMARY KEY (`id`),
   UNIQUE KEY `UQ_namespace_name` (`namespace`, `name`),
   KEY `IDX_next_execution` (`next_execution_time`)
