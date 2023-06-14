@@ -28,6 +28,7 @@ public class InfraStatsD extends StatsD {
         public static final String TASKS_SUCCESS = "greenseer_tasks_success";
         public static final String TASKS_MISSING = "greenseer_tasks_missing_handler";
         public static final String TASKS_CLEANED = "greenseer_tasks_cleaned";
+        public static final String TASK_RUN_TIME = "greenseer_task_run_time";
     }
 
     private static final String METRICS_PREFIX = "";
