@@ -1,6 +1,8 @@
 # Simple Scheduler
 A simple to use, lightweight clustered scheduler for Java/Scala. It can be used for job processing also, but it is recommended that the operations are restricted to light-weight processing only.
 
+Note: For recurring jobs make sure that execution time is less than recurring jobs otherwise the job results in misfire for for that frequency and effective frequency = max(next execution time based on cron, current job execution time).
+
 #### Features
 - **Clustered**: When a Lock is used, guarantees execution by a single scheduler instance
 - **Requirements**: A single relational database table.
